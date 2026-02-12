@@ -6,7 +6,8 @@ import { AnthropicProvider } from "./llm/anthropic.js";
 import { runAgent } from "./llm/agent.js";
 import { buildSystemPrompt, buildUserMessage } from "./report/prompt.js";
 import { loadPastReports, saveReport, listReports } from "./report/memory.js";
-import { loginGitHub, logoutGitHub } from "./auth/github.js";
+import { loginGitHub, logoutGitHub, loadStoredGitHubToken } from "./auth/github.js";
+import { getSlackToken } from "./auth/tokens.js";
 import { performSlackOAuth } from "./auth/slack.js";
 import {
   AtlassianOAuthProvider,
@@ -47,63 +48,75 @@ async function main() {
 async function cmdInit() {
   if (configExists()) {
     console.log(`Config already exists at ${getConfigPath()}`);
-    return;
-  }
-
-  // Ask about Slack OAuth before writing config
-  let slackOAuth: SlackOAuthInit | undefined;
-  process.stderr.write("\nSet up Slack with OAuth? (y/N) ");
-  const slackAnswer = await readLine();
-  if (slackAnswer.trim().toLowerCase() === "y") {
-    process.stderr.write("  Slack app client ID: ");
-    const clientId = (await readLine()).trim();
-    if (!clientId) {
-      error("Client ID is required. Skipping Slack setup.");
-    } else {
-      process.stderr.write("  Client secret env var [SLACK_CLIENT_SECRET]: ");
-      const secretEnv = (await readLine()).trim() || "SLACK_CLIENT_SECRET";
-      process.stderr.write("  Channels (comma-separated, e.g. #general, #eng): ");
-      const channelsRaw = (await readLine()).trim();
-      const channels = channelsRaw
-        ? channelsRaw.split(",").map((c) => c.trim()).filter(Boolean)
-        : [];
-      slackOAuth = { client_id: clientId, client_secret_env: secretEnv, channels };
+  } else {
+    // Ask about Slack OAuth before writing config
+    let slackOAuth: SlackOAuthInit | undefined;
+    process.stderr.write("\nSet up Slack with OAuth? (y/N) ");
+    const slackAnswer = await readLine();
+    if (slackAnswer.trim().toLowerCase() === "y") {
+      process.stderr.write("  Slack app client ID: ");
+      const clientId = (await readLine()).trim();
+      if (!clientId) {
+        error("Client ID is required. Skipping Slack setup.");
+      } else {
+        process.stderr.write("  Client secret env var [SLACK_CLIENT_SECRET]: ");
+        const secretEnv = (await readLine()).trim() || "SLACK_CLIENT_SECRET";
+        process.stderr.write("  Channels (comma-separated, e.g. #general, #eng): ");
+        const channelsRaw = (await readLine()).trim();
+        const channels = channelsRaw
+          ? channelsRaw.split(",").map((c) => c.trim()).filter(Boolean)
+          : [];
+        slackOAuth = { client_id: clientId, client_secret_env: secretEnv, channels };
+      }
     }
+
+    console.log(initConfig(slackOAuth));
+    const configPath = getConfigPath();
+    const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+    Bun.spawn([opener, configPath], { stdio: ["ignore", "ignore", "ignore"] });
   }
 
-  console.log(initConfig(slackOAuth));
-  const configPath = getConfigPath();
-  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  Bun.spawn([opener, configPath], { stdio: ["ignore", "ignore", "ignore"] });
+  // Check OAuth status and offer login for missing auth
+  const config = loadConfig();
 
-  // Offer GitHub OAuth login
-  process.stderr.write("\nLog in to GitHub with OAuth? (Y/n) ");
-  const ghAnswer = await readLine();
-  if (ghAnswer.trim().toLowerCase() !== "n") {
-    await loginGitHub();
+  if (!loadStoredGitHubToken() && !config.github.token_env) {
+    process.stderr.write("\nLog in to GitHub with OAuth? (Y/n) ");
+    const ghAnswer = await readLine();
+    if (ghAnswer.trim().toLowerCase() !== "n") {
+      await loginGitHub();
+    }
+  } else {
+    log("GitHub: authenticated");
   }
 
-  // Offer Atlassian (Jira) OAuth login
-  process.stderr.write("\nLog in to Atlassian (Jira) with OAuth? (y/N) ");
-  const atlAnswer = await readLine();
-  if (atlAnswer.trim().toLowerCase() === "y") {
-    await cmdAuthLogin();
+  if (!hasAtlassianAuth()) {
+    process.stderr.write("\nLog in to Atlassian (Jira) with OAuth? (y/N) ");
+    const atlAnswer = await readLine();
+    if (atlAnswer.trim().toLowerCase() === "y") {
+      await cmdAuthLogin();
+    }
+  } else {
+    log("Atlassian: authenticated");
   }
 
-  // If Slack OAuth was configured, offer to authenticate now
-  if (slackOAuth) {
-    const clientSecret = resolveSecret(slackOAuth.client_secret_env);
+  const slackToken = getSlackToken() || (config.slack.token_env && resolveSecret(config.slack.token_env));
+  if (slackToken) {
+    log("Slack: authenticated");
+  } else if (config.slack.client_id && config.slack.client_secret_env) {
+    const clientSecret = resolveSecret(config.slack.client_secret_env);
     if (clientSecret) {
       process.stderr.write("\nRun Slack OAuth now? (Y/n) ");
       const authAnswer = await readLine();
       if (authAnswer.trim().toLowerCase() !== "n") {
-        await performSlackOAuth(slackOAuth.client_id, clientSecret);
+        await performSlackOAuth(config.slack.client_id, clientSecret);
       } else {
         log('Run "reporter auth slack" later to complete Slack setup.');
       }
     } else {
-      log(`Set ${slackOAuth.client_secret_env} env var, then run "reporter auth slack".`);
+      log(`Set ${config.slack.client_secret_env} env var, then run "reporter auth slack".`);
     }
+  } else {
+    log("Slack: not configured — add client_id to [slack] in config, then run \"reporter auth slack\"");
   }
 }
 
@@ -116,9 +129,11 @@ function readLine(): Promise<string> {
       if (str.includes("\n")) {
         process.stdin.removeListener("data", onData);
         process.stdin.pause();
+        process.stdin.unref();
         resolve(str.split("\n")[0]);
       }
     };
+    process.stdin.ref();
     process.stdin.resume();
     process.stdin.on("data", onData);
   });
