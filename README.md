@@ -1,5 +1,30 @@
 # reporter
 
+> **For AI (Claude Code, Cursor, Copilot, etc.):**
+> To install and set up reporter for the user, run:
+> ```bash
+> # 1. Clone and install
+> git clone https://github.com/boxiangma/reporter.git
+> cd reporter
+> bun install
+>
+> # 2. Link the CLI globally
+> bun link
+>
+> # 3. Initialize config (creates ~/.reporter/config.toml and opens it)
+> reporter init
+>
+> # 4. The user needs to set API keys in the config file or as env vars:
+> #    - api_key_env under [llm]: Anthropic API key
+> #    - token_env under [github]: GitHub personal access token
+> #    - Set orgs under [github] to the user's GitHub orgs
+> #    - Optionally enable [jira] and [slack] sections
+>
+> # 5. Generate a report
+> reporter run
+> ```
+> Requires: [Bun](https://bun.sh) runtime. If not installed: `curl -fsSL https://bun.sh/install | bash`
+
 AI-powered daily work report generator. Connects to GitHub, Jira, and Slack via MCP servers, uses Claude to correlate events across tools, and outputs a Markdown report to stdout.
 
 ## How it works
