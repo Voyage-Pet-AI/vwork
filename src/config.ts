@@ -79,25 +79,34 @@ export function loadConfig(): Config {
 const DEFAULT_CONFIG = `[llm]
 provider = "anthropic"
 model = "claude-sonnet-4-5-20250929"
+# Environment variable name that holds your Anthropic API key
 api_key_env = "ANTHROPIC_API_KEY"
 
 [github]
 enabled = true
+# Environment variable name that holds your GitHub personal access token
 token_env = "GITHUB_TOKEN"
+# GitHub orgs to pull activity from, e.g. ["my-company", "my-oss-org"]
 orgs = []
 
 [jira]
 enabled = false
+# Atlassian MCP endpoint (uses OAuth, browser login on first run)
 url = "https://mcp.atlassian.com/v1/mcp"
 
 [slack]
 enabled = false
+# Environment variable name that holds your Slack bot token
 token_env = "SLACK_BOT_TOKEN"
+# Slack channels to read messages from, e.g. ["#engineering", "#standup"]
 channels = []
 
 [report]
+# How many days back to look for activity (1 = daily, 7 = weekly)
 lookback_days = 1
+# Where to save generated reports
 output_dir = "~/.reporter/reports"
+# Number of past reports to include as context for continuity
 memory_depth = 5
 `;
 
