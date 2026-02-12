@@ -117,7 +117,9 @@ reporter run                   # Generate report to stdout
 reporter run > report.md       # Pipe to file
 reporter run --dry             # Show discovered tools, skip LLM call
 reporter history               # List past saved reports
-reporter schedule --every "9am"  # Write crontab/launchd entry
+reporter schedule --every "9am"    # Write crontab/launchd entry
+reporter schedule --every "*/15m"  # Every 15 minutes
+reporter schedule --every "*/6h"   # Every 6 hours
 ```
 
 ## Key Components

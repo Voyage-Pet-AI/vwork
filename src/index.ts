@@ -114,6 +114,7 @@ function cmdSchedule() {
   if (everyIdx === -1 || !args[everyIdx + 1]) {
     console.log('Usage: reporter schedule --every "9am"');
     console.log('       reporter schedule --every "*/6h"');
+    console.log('       reporter schedule --every "*/15m"');
     process.exit(1);
   }
 
@@ -130,6 +131,9 @@ function cmdSchedule() {
   } else if (time.match(/^\*\/\d+h$/)) {
     const hours = parseInt(time.slice(2));
     cronExpr = `0 */${hours} * * *`;
+  } else if (time.match(/^\*\/\d+m$/)) {
+    const minutes = parseInt(time.slice(2));
+    cronExpr = `*/${minutes} * * * *`;
   } else {
     // Assume raw cron expression
     cronExpr = time;
@@ -153,6 +157,8 @@ Commands:
   reporter run --no-save           Don't save report to disk
   reporter history                 List past reports
   reporter schedule --every "9am"  Show crontab entry for scheduling
+  reporter schedule --every "*/15m" Every N minutes
+  reporter schedule --every "*/6h"  Every N hours
 
 Environment:
   ANTHROPIC_API_KEY    Claude API key

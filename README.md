@@ -60,6 +60,8 @@ bun src/index.ts history
 
 # Get a crontab entry for scheduling
 bun src/index.ts schedule --every "9am"
+bun src/index.ts schedule --every "*/15m"
+bun src/index.ts schedule --every "*/6h"
 ```
 
 ## Config
