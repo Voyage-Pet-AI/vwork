@@ -2,6 +2,7 @@ import { parse } from "smol-toml";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { loadStoredGitHubToken } from "./auth/github.js";
 
 export interface LLMConfig {
   provider: "anthropic";
@@ -11,7 +12,7 @@ export interface LLMConfig {
 
 export interface GitHubConfig {
   enabled: boolean;
-  token_env: string;
+  token_env?: string;
   orgs: string[];
 }
 
@@ -22,7 +23,9 @@ export interface JiraConfig {
 
 export interface SlackConfig {
   enabled: boolean;
-  token_env: string;
+  token_env?: string;
+  client_id?: string;
+  client_secret_env?: string;
   channels: string[];
 }
 
@@ -84,20 +87,24 @@ api_key_env = "ANTHROPIC_API_KEY"
 
 [github]
 enabled = true
-# GitHub token — env var name like "GITHUB_TOKEN" or the token directly
-token_env = "GITHUB_TOKEN"
+# Auth: run "reporter login github" for browser-based OAuth (recommended)
+# Or set a token manually — env var name like "GITHUB_TOKEN" or the token directly
+# token_env = "GITHUB_TOKEN"
 # GitHub orgs to pull activity from, e.g. ["my-company", "my-oss-org"]
 orgs = []
 
 [jira]
 enabled = false
-# Atlassian MCP endpoint (uses OAuth, browser login on first run)
+# Run "reporter auth login" before enabling
 url = "https://mcp.atlassian.com/v1/mcp"
 
 [slack]
 enabled = false
-# Slack token — env var name like "SLACK_BOT_TOKEN" or the token directly
-token_env = "SLACK_BOT_TOKEN"
+# Option 1 (recommended): OAuth — run "reporter auth slack" for browser-based login
+# client_id = "your-slack-app-client-id"
+# client_secret_env = "SLACK_CLIENT_SECRET"
+# Option 2: Manual token — env var name like "SLACK_BOT_TOKEN" or the token directly
+# token_env = "SLACK_BOT_TOKEN"
 # Slack channels to read messages from, e.g. ["#engineering", "#standup"]
 channels = []
 
@@ -121,14 +128,47 @@ export function resolveSecret(value: string): string | undefined {
   return value;
 }
 
-export function initConfig(): string {
+/**
+ * Resolve GitHub token with precedence:
+ * 1. OAuth stored token (from `reporter login github`)
+ * 2. token_env (env var name or literal token from config)
+ * 3. undefined
+ */
+export function resolveGitHubToken(config: Config): string | undefined {
+  const oauthToken = loadStoredGitHubToken();
+  if (oauthToken) return oauthToken;
+
+  if (config.github.token_env) {
+    return resolveSecret(config.github.token_env);
+  }
+
+  return undefined;
+}
+
+export interface SlackOAuthInit {
+  client_id: string;
+  client_secret_env: string;
+  channels: string[];
+}
+
+export function initConfig(slackOAuth?: SlackOAuthInit): string {
   mkdirSync(REPORTER_DIR, { recursive: true });
   mkdirSync(join(REPORTER_DIR, "reports"), { recursive: true });
+  mkdirSync(join(REPORTER_DIR, "auth"), { recursive: true });
 
   if (existsSync(CONFIG_PATH)) {
     return `Config already exists at ${CONFIG_PATH}`;
   }
 
-  writeFileSync(CONFIG_PATH, DEFAULT_CONFIG);
+  let config = DEFAULT_CONFIG;
+  if (slackOAuth) {
+    const channelsStr = JSON.stringify(slackOAuth.channels);
+    config = config.replace(
+      /\[slack\][\s\S]*?\n\n/,
+      `[slack]\nenabled = true\nclient_id = "${slackOAuth.client_id}"\nclient_secret_env = "${slackOAuth.client_secret_env}"\nchannels = ${channelsStr}\n\n`
+    );
+  }
+
+  writeFileSync(CONFIG_PATH, config);
   return `Config created at ${CONFIG_PATH}\nEdit it to add your API keys and preferences.`;
 }

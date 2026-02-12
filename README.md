@@ -11,16 +11,18 @@
 > # 2. Link the CLI globally
 > bun link
 >
-> # 3. Initialize config (creates ~/.reporter/config.toml and opens it)
+> # 3. Initialize config (creates ~/reporter/config.toml and opens it)
 > reporter init
 >
-> # 4. The user needs to set API keys in the config file or as env vars:
+> # 4. Authenticate with GitHub (opens browser for OAuth):
+> reporter login github
+>
+> # 5. The user needs to set the Anthropic API key in the config file or as env var:
 > #    - api_key_env under [llm]: Anthropic API key
-> #    - token_env under [github]: GitHub personal access token
 > #    - Set orgs under [github] to the user's GitHub orgs
 > #    - Optionally enable [jira] and [slack] sections
 >
-> # 5. Generate a report
+> # 6. Generate a report
 > reporter run
 > ```
 > Requires: [Bun](https://bun.sh) runtime. If not installed: `curl -fsSL https://bun.sh/install | bash`
@@ -54,20 +56,31 @@ bun install
 ## Setup
 
 ```bash
-# Create config at ~/.reporter/config.toml
+# Create config at ~/reporter/config.toml
 bun src/index.ts init
 
-# Set your API keys
+# Authenticate with GitHub (opens browser for OAuth)
+bun src/index.ts login github
+
+# Set your Anthropic API key
 export ANTHROPIC_API_KEY=sk-ant-...
-export GITHUB_TOKEN=ghp_...
-export SLACK_BOT_TOKEN=xoxb-...  # optional
+
+# Optional: set tokens manually instead of OAuth
+# export GITHUB_TOKEN=ghp_...
+# export SLACK_BOT_TOKEN=xoxb-...
 ```
 
-Edit `~/.reporter/config.toml` to enable/disable integrations and set your orgs/channels.
+Edit `~/reporter/config.toml` to enable/disable integrations and set your orgs/channels.
 
 ## Usage
 
 ```bash
+# Authenticate with GitHub (browser-based OAuth)
+bun src/index.ts login github
+
+# Remove stored GitHub token
+bun src/index.ts logout github
+
 # Generate a report
 bun src/index.ts run
 
@@ -77,7 +90,7 @@ bun src/index.ts run > report.md
 # See what tools are available (no LLM call)
 bun src/index.ts run --dry
 
-# Don't save report to ~/.reporter/reports/
+# Don't save report to ~/reporter/reports/
 bun src/index.ts run --no-save
 
 # List past reports
@@ -101,7 +114,8 @@ api_key_env = "ANTHROPIC_API_KEY"
 
 [github]
 enabled = true
-token_env = "GITHUB_TOKEN"
+# Auth: run "reporter login github" for OAuth (recommended)
+# token_env = "GITHUB_TOKEN"  # fallback: env var or literal token
 orgs = ["your-org"]
 
 [jira]
@@ -136,6 +150,8 @@ Each report contains:
 src/
 ├── index.ts           # CLI entry point
 ├── config.ts          # TOML config loader
+├── auth/
+│   └── github.ts      # GitHub OAuth device flow
 ├── mcp/
 │   ├── client.ts      # MCP client manager
 │   └── registry.ts    # Server spawn configs

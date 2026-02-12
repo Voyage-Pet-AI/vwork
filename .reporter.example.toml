@@ -5,16 +5,23 @@ api_key_env = "ANTHROPIC_API_KEY"
 
 [github]
 enabled = true
-token_env = "GITHUB_TOKEN"
+# Auth: run "reporter login github" for browser-based OAuth (recommended)
+# Or set a token manually:
+# token_env = "GITHUB_TOKEN"
 orgs = ["your-org"]
 
 [jira]
 enabled = false
+# Run "reporter auth login" before enabling
 url = "https://mcp.atlassian.com/v1/mcp"
 
 [slack]
 enabled = false
-token_env = "SLACK_BOT_TOKEN"
+# Option 1 (recommended): OAuth — run "reporter auth slack" after setting these
+# client_id = "your-slack-app-client-id"
+# client_secret_env = "SLACK_CLIENT_SECRET"
+# Option 2: Manual token
+# token_env = "SLACK_BOT_TOKEN"
 channels = ["#engineering", "#standup"]
 
 [report]

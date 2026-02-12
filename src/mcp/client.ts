@@ -1,6 +1,11 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { ServerEntry } from "./registry.js";
+import { AtlassianOAuthProvider } from "../auth/atlassian.js";
+import { waitForOAuthCallback } from "../auth/callback.js";
 import { log, error, debug } from "../utils/log.js";
 
 export interface MCPTool {
@@ -12,9 +17,11 @@ export interface MCPTool {
 interface ConnectedServer {
   name: string;
   client: Client;
-  transport: StdioClientTransport;
+  transport: Transport;
   tools: MCPTool[];
 }
+
+const CALLBACK_PORT = 32191;
 
 export class MCPClientManager {
   private servers: ConnectedServer[] = [];
@@ -28,12 +35,19 @@ export class MCPClientManager {
     for (const entry of entries) {
       try {
         log(`Connecting to ${entry.name} MCP server...`);
-        const transport = new StdioClientTransport({
-          command: entry.command,
-          args: entry.args,
-          env: { ...process.env as Record<string, string>, ...entry.env },
-          stderr: "pipe",
-        });
+
+        let transport: Transport;
+
+        if (entry.transport === "http") {
+          transport = await this.connectHttp(entry.url);
+        } else {
+          transport = new StdioClientTransport({
+            command: entry.command,
+            args: entry.args,
+            env: { ...(process.env as Record<string, string>), ...entry.env },
+            stderr: "pipe",
+          });
+        }
 
         const client = new Client({
           name: "reporter",
@@ -60,6 +74,29 @@ export class MCPClientManager {
         );
       }
     }
+  }
+
+  private async connectHttp(url: string): Promise<StreamableHTTPClientTransport> {
+    const provider = new AtlassianOAuthProvider();
+    const transport = new StreamableHTTPClientTransport(
+      new URL(url),
+      { authProvider: provider }
+    );
+
+    try {
+      await transport.start();
+    } catch (e) {
+      if (e instanceof UnauthorizedError) {
+        log("Authorization required — opening browser...");
+        const code = await waitForOAuthCallback(CALLBACK_PORT);
+        await transport.finishAuth(code);
+        await transport.start();
+      } else {
+        throw e;
+      }
+    }
+
+    return transport;
   }
 
   getAllTools(): MCPTool[] {
