@@ -28,6 +28,9 @@ async function main() {
 
 function cmdInit() {
   console.log(initConfig());
+  const configPath = getConfigPath();
+  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  Bun.spawn([opener, configPath], { stdio: ["ignore", "ignore", "ignore"] });
 }
 
 async function cmdRun() {
