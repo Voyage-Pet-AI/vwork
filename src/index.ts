@@ -30,10 +30,17 @@ import { multiselect, cancelSymbol, type MultiselectItem } from "./prompts/multi
 import { log, error } from "./utils/log.js";
 import { readLine } from "./utils/readline.js";
 
+const VERSION = "0.1.1";
+
 const args = process.argv.slice(2);
 const command = args[0] ?? "help";
 
 async function main() {
+  if (args.includes("-v") || args.includes("--version")) {
+    console.log(VERSION);
+    return;
+  }
+
   switch (command) {
     case "init":
       return cmdInit();
@@ -620,6 +627,9 @@ Commands:
   reporter schedule --every "9am"      Show crontab entry for scheduling
   reporter schedule --every "*/15m"    Every N minutes
   reporter schedule --every "*/6h"     Every N hours
+
+Options:
+  -v, --version                    Show version
 
 Environment:
   ANTHROPIC_API_KEY    Claude API key (optional if using "reporter login anthropic")
