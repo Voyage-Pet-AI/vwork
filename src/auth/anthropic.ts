@@ -7,6 +7,12 @@ import { log, error } from "../utils/log.js";
 // Same client ID as Claude CLI
 const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
+// URLs matching Claude Code's current production config
+const CONSOLE_AUTHORIZE_URL = "https://platform.claude.com/oauth/authorize";
+const MANUAL_REDIRECT_URL = "https://platform.claude.com/oauth/code/callback";
+const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
+const API_KEY_URL = "https://api.anthropic.com/api/oauth/claude_cli/create_api_key";
+
 const KEY_FILE = () => join(getReporterDir(), "auth", "anthropic-key.json");
 const OAUTH_FILE = () => join(getReporterDir(), "auth", "anthropic-oauth.json");
 
@@ -51,7 +57,7 @@ interface StoredOAuth {
   created_at: string;
 }
 
-// --- OAuth → API Key flow (console.anthropic.com) ---
+// --- OAuth → API Key flow (platform.claude.com) ---
 
 export async function loginAnthropicApiKey(): Promise<void> {
   log("Starting Anthropic OAuth login (API key)...");
@@ -59,41 +65,40 @@ export async function loginAnthropicApiKey(): Promise<void> {
   const { verifier, challenge } = await generatePKCE();
   const state = randomState();
 
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: CLIENT_ID,
-    redirect_uri: "https://console.anthropic.com/oauth/code/callback",
-    scope: "org:create_api_key",
-    state,
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-  });
+  const authUrl = new URL(CONSOLE_AUTHORIZE_URL);
+  authUrl.searchParams.set("code", "true");
+  authUrl.searchParams.set("client_id", CLIENT_ID);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("redirect_uri", MANUAL_REDIRECT_URL);
+  authUrl.searchParams.set("scope", "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers");
+  authUrl.searchParams.set("code_challenge", challenge);
+  authUrl.searchParams.set("code_challenge_method", "S256");
+  authUrl.searchParams.set("state", state);
 
-  const authUrl = `https://console.anthropic.com/oauth/authorize?${params}`;
-
-  process.stderr.write(`\nOpening browser for Anthropic authorization...\n`);
-  process.stderr.write(`If it doesn't open, visit:\n  ${authUrl}\n\n`);
-
-  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  Bun.spawn([opener, authUrl], { stdio: ["ignore", "ignore", "ignore"] });
-
-  process.stderr.write("Paste the authorization code from the browser: ");
-  const code = (await readLine()).trim();
-  if (!code) {
+  process.stderr.write(`\nVisit this URL to authorize:\n  ${authUrl}\n\n`);
+  process.stderr.write(
+    "After clicking Authorize, copy the code from the browser and paste it here: "
+  );
+  const rawCode = (await readLine()).trim();
+  if (!rawCode) {
     throw new Error("No authorization code provided.");
   }
 
+  // Anthropic returns code#state — split if present
+  const code = rawCode.split("#")[0];
+
   // Exchange code for token
   log("Exchanging authorization code...");
-  const tokenRes = await fetch("https://console.anthropic.com/v1/oauth/token", {
+  const tokenRes = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       client_id: CLIENT_ID,
       code,
-      redirect_uri: "https://console.anthropic.com/oauth/code/callback",
+      redirect_uri: MANUAL_REDIRECT_URL,
       code_verifier: verifier,
+      state,
     }),
   });
 
@@ -106,7 +111,7 @@ export async function loginAnthropicApiKey(): Promise<void> {
 
   // Create a permanent API key
   log("Creating API key...");
-  const keyRes = await fetch("https://api.anthropic.com/api/oauth/claude_cli/create_api_key", {
+  const keyRes = await fetch(API_KEY_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${tokenData.access_token}`,
@@ -134,77 +139,6 @@ export async function loginAnthropicApiKey(): Promise<void> {
   log("Anthropic API key created and stored.");
 }
 
-// --- Pro/Max OAuth flow (claude.ai) ---
-
-export async function loginAnthropicMax(): Promise<void> {
-  log("Starting Anthropic Pro/Max OAuth login...");
-
-  const { verifier, challenge } = await generatePKCE();
-  const state = randomState();
-
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: CLIENT_ID,
-    redirect_uri: "https://console.anthropic.com/oauth/code/callback",
-    scope: "user:inference user:profile",
-    state,
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-  });
-
-  const authUrl = `https://claude.ai/oauth/authorize?${params}`;
-
-  process.stderr.write(`\nOpening browser for Anthropic Pro/Max authorization...\n`);
-  process.stderr.write(`If it doesn't open, visit:\n  ${authUrl}\n\n`);
-
-  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  Bun.spawn([opener, authUrl], { stdio: ["ignore", "ignore", "ignore"] });
-
-  process.stderr.write("Paste the authorization code from the browser: ");
-  const code = (await readLine()).trim();
-  if (!code) {
-    throw new Error("No authorization code provided.");
-  }
-
-  // Exchange code for tokens
-  log("Exchanging authorization code...");
-  const tokenRes = await fetch("https://claude.ai/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      code,
-      redirect_uri: "https://console.anthropic.com/oauth/code/callback",
-      code_verifier: verifier,
-    }),
-  });
-
-  if (!tokenRes.ok) {
-    const body = await tokenRes.text();
-    throw new Error(`Token exchange failed (${tokenRes.status}): ${body}`);
-  }
-
-  const tokenData = await tokenRes.json() as {
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-  };
-
-  // Store tokens
-  const stored: StoredOAuth = {
-    access_token: tokenData.access_token,
-    refresh_token: tokenData.refresh_token,
-    expires_at: Date.now() + tokenData.expires_in * 1000,
-    created_at: new Date().toISOString(),
-  };
-  const oauthPath = OAUTH_FILE();
-  writeFileSync(oauthPath, JSON.stringify(stored, null, 2));
-  chmodSync(oauthPath, 0o600);
-
-  log("Anthropic Pro/Max OAuth tokens stored.");
-}
-
 // --- Token refresh ---
 
 export async function refreshAnthropicOAuth(): Promise<string | undefined> {
@@ -218,7 +152,7 @@ export async function refreshAnthropicOAuth(): Promise<string | undefined> {
   }
 
   log("Refreshing Anthropic OAuth token...");
-  const tokenRes = await fetch("https://claude.ai/oauth/token", {
+  const tokenRes = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -229,7 +163,7 @@ export async function refreshAnthropicOAuth(): Promise<string | undefined> {
   });
 
   if (!tokenRes.ok) {
-    error(`Token refresh failed (${tokenRes.status}). Run "reporter login anthropic --max" again.`);
+    error(`Token refresh failed (${tokenRes.status}). Run "reporter login anthropic" again.`);
     return undefined;
   }
 

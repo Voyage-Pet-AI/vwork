@@ -9,7 +9,6 @@ import { loadPastReports, saveReport, listReports } from "./report/memory.js";
 import { loginGitHub, logoutGitHub, loadStoredGitHubToken } from "./auth/github.js";
 import {
   loginAnthropicApiKey,
-  loginAnthropicMax,
   logoutAnthropic,
   hasAnthropicAuth,
 } from "./auth/anthropic.js";
@@ -78,13 +77,7 @@ async function cmdInit() {
     process.stderr.write("\nLog in to Anthropic with OAuth? (Y/n) ");
     const answer = await readLine();
     if (answer.trim().toLowerCase() !== "n") {
-      process.stderr.write("Use Pro/Max subscription (free inference)? (y/N) ");
-      const maxAnswer = await readLine();
-      if (maxAnswer.trim().toLowerCase() === "y") {
-        await loginAnthropicMax();
-      } else {
-        await loginAnthropicApiKey();
-      }
+      await loginAnthropicApiKey();
     }
   } else {
     log("Anthropic: authenticated (config)");
@@ -318,15 +311,11 @@ async function cmdLogin() {
     case "github":
       return loginGitHub();
     case "anthropic":
-      if (args.includes("--max")) {
-        return loginAnthropicMax();
-      }
       return loginAnthropicApiKey();
     default:
       console.log(`Usage:
   reporter login github               Authenticate with GitHub via browser OAuth
-  reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)
-  reporter login anthropic --max       Authenticate with Anthropic Pro/Max subscription`);
+  reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)`);
       process.exit(1);
   }
 }
@@ -614,7 +603,6 @@ function cmdHelp() {
 Commands:
   reporter init                        Create config at ~/reporter/config.toml
   reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)
-  reporter login anthropic --max       Authenticate with Anthropic Pro/Max subscription
   reporter logout anthropic            Remove stored Anthropic tokens
   reporter login github                Authenticate with GitHub via browser OAuth
   reporter logout github               Remove stored GitHub token
