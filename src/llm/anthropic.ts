@@ -9,20 +9,71 @@ import type {
 } from "./provider.js";
 import type { Config } from "../config.js";
 import { resolveSecret } from "../config.js";
+import {
+  loadStoredAnthropicOAuth,
+  loadStoredAnthropicKey,
+  refreshAnthropicOAuth,
+} from "../auth/anthropic.js";
+
+type AuthMode = "oauth" | "key" | "config";
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
   private model: string;
+  private authMode: AuthMode;
 
   constructor(config: Config) {
-    const apiKey = resolveSecret(config.llm.api_key_env);
-    if (!apiKey) {
-      throw new Error(
-        `API key not configured — set ${config.llm.api_key_env} in environment or put the key directly in config`
-      );
-    }
-    this.client = new Anthropic({ apiKey });
     this.model = config.llm.model;
+
+    // Auth precedence: Pro/Max OAuth → OAuth-created API key → config api_key_env
+    const oauthTokens = loadStoredAnthropicOAuth();
+    if (oauthTokens) {
+      this.authMode = "oauth";
+      this.client = new Anthropic({
+        authToken: oauthTokens.access_token,
+        defaultHeaders: {
+          "anthropic-beta": "oauth-2025-04-20,interleaved-thinking-2025-05-14",
+        },
+      });
+      return;
+    }
+
+    const storedKey = loadStoredAnthropicKey();
+    if (storedKey) {
+      this.authMode = "key";
+      this.client = new Anthropic({ apiKey: storedKey });
+      return;
+    }
+
+    if (config.llm.api_key_env) {
+      const apiKey = resolveSecret(config.llm.api_key_env);
+      if (apiKey) {
+        this.authMode = "config";
+        this.client = new Anthropic({ apiKey });
+        return;
+      }
+    }
+
+    throw new Error(
+      `No Anthropic auth configured.\n` +
+      `  Run "reporter login anthropic" for browser-based OAuth (recommended)\n` +
+      `  Or set api_key_env in config / ANTHROPIC_API_KEY env var`
+    );
+  }
+
+  private async ensureFreshToken(): Promise<void> {
+    if (this.authMode !== "oauth") return;
+
+    const freshToken = await refreshAnthropicOAuth();
+    if (freshToken) {
+      // Recreate client with fresh token
+      this.client = new Anthropic({
+        authToken: freshToken,
+        defaultHeaders: {
+          "anthropic-beta": "oauth-2025-04-20,interleaved-thinking-2025-05-14",
+        },
+      });
+    }
   }
 
   async chat(
@@ -30,6 +81,8 @@ export class AnthropicProvider implements LLMProvider {
     messages: Message[],
     tools: LLMTool[]
   ): Promise<LLMResponse> {
+    await this.ensureFreshToken();
+
     const anthropicTools: Anthropic.Tool[] = tools.map((t) => ({
       name: t.name,
       description: t.description ?? "",

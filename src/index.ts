@@ -7,6 +7,12 @@ import { runAgent } from "./llm/agent.js";
 import { buildSystemPrompt, buildUserMessage } from "./report/prompt.js";
 import { loadPastReports, saveReport, listReports } from "./report/memory.js";
 import { loginGitHub, logoutGitHub, loadStoredGitHubToken } from "./auth/github.js";
+import {
+  loginAnthropicApiKey,
+  loginAnthropicMax,
+  logoutAnthropic,
+  hasAnthropicAuth,
+} from "./auth/anthropic.js";
 import { getSlackToken } from "./auth/tokens.js";
 import { performSlackOAuth } from "./auth/slack.js";
 import {
@@ -23,6 +29,7 @@ import { loadMCPConfig, saveMCPConfig, mcpConfigToServers, getMCPConfigPath, typ
 import { MCP_CATALOG, type CatalogEntry } from "./mcp/catalog.js";
 import { multiselect, cancelSymbol, type MultiselectItem } from "./prompts/multiselect.js";
 import { log, error } from "./utils/log.js";
+import { readLine } from "./utils/readline.js";
 
 const args = process.argv.slice(2);
 const command = args[0] ?? "help";
@@ -51,122 +58,64 @@ async function main() {
 }
 
 async function cmdInit() {
+  // 1. Config creation
   if (configExists()) {
     console.log(`Config already exists at ${getConfigPath()}`);
   } else {
-    // Ask about Slack OAuth before writing config
-    let slackOAuth: SlackOAuthInit | undefined;
-    process.stderr.write("\nSet up Slack with OAuth? (y/N) ");
-    const slackAnswer = await readLine();
-    if (slackAnswer.trim().toLowerCase() === "y") {
-      printSlackSetupGuide();
-      process.stderr.write("  Slack app client ID: ");
-      const clientId = (await readLine()).trim();
-      if (!clientId) {
-        error("Client ID is required. Skipping Slack setup.");
-      } else {
-        process.stderr.write("  Client secret env var [SLACK_CLIENT_SECRET]: ");
-        const secretEnv = (await readLine()).trim() || "SLACK_CLIENT_SECRET";
-        process.stderr.write("  Channels (comma-separated, e.g. #general, #eng): ");
-        const channelsRaw = (await readLine()).trim();
-        const channels = channelsRaw
-          ? channelsRaw.split(",").map((c) => c.trim()).filter(Boolean)
-          : [];
-        slackOAuth = { client_id: clientId, client_secret_env: secretEnv, channels };
-      }
-    }
-
-    console.log(initConfig(slackOAuth));
+    console.log(initConfig());
     const configPath = getConfigPath();
     const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
     Bun.spawn([opener, configPath], { stdio: ["ignore", "ignore", "ignore"] });
   }
 
-  // Check OAuth status and offer login for missing auth
   const config = loadConfig();
 
-  if (!loadStoredGitHubToken() && !config.github.token_env) {
-    process.stderr.write("\nLog in to GitHub with OAuth? (Y/n) ");
-    const ghAnswer = await readLine();
-    if (ghAnswer.trim().toLowerCase() !== "n") {
-      await loginGitHub();
+  // Check Anthropic auth and offer login if needed
+  const anthropicAuth = hasAnthropicAuth();
+  if (anthropicAuth.mode !== "none") {
+    log(`Anthropic: authenticated (${anthropicAuth.mode})`);
+  } else if (!config.llm.api_key_env || !resolveSecret(config.llm.api_key_env)) {
+    process.stderr.write("\nLog in to Anthropic with OAuth? (Y/n) ");
+    const answer = await readLine();
+    if (answer.trim().toLowerCase() !== "n") {
+      process.stderr.write("Use Pro/Max subscription (free inference)? (y/N) ");
+      const maxAnswer = await readLine();
+      if (maxAnswer.trim().toLowerCase() === "y") {
+        await loginAnthropicMax();
+      } else {
+        await loginAnthropicApiKey();
+      }
     }
   } else {
-    log("GitHub: authenticated");
+    log("Anthropic: authenticated (config)");
   }
 
-  if (!hasAtlassianAuth()) {
-    process.stderr.write("\nLog in to Atlassian (Jira) with OAuth? (y/N) ");
-    const atlAnswer = await readLine();
-    if (atlAnswer.trim().toLowerCase() === "y") {
-      await cmdAuthLogin();
-    }
-  } else {
-    log("Atlassian: authenticated");
-  }
-
+  // 2. Determine which builtins are already authenticated
+  const githubAuthed = !!(loadStoredGitHubToken() || config.github.token_env);
+  const jiraAuthed = hasAtlassianAuth();
   const slackToken = getSlackToken() || (config.slack.token_env && resolveSecret(config.slack.token_env));
-  if (slackToken) {
-    log("Slack: authenticated");
-  } else if (config.slack.client_id && config.slack.client_secret_env) {
-    const clientSecret = resolveSecret(config.slack.client_secret_env);
-    if (clientSecret) {
-      process.stderr.write("\nRun Slack OAuth now? (Y/n) ");
-      const authAnswer = await readLine();
-      if (authAnswer.trim().toLowerCase() !== "n") {
-        await performSlackOAuth(config.slack.client_id, clientSecret);
-      } else {
-        log('Run "reporter auth slack" later to complete Slack setup.');
-      }
-    } else {
-      log(`Set ${config.slack.client_secret_env} env var, then run "reporter auth slack".`);
-    }
-  } else {
-    process.stderr.write("\nSet up Slack with OAuth? (y/N) ");
-    const slackAnswer = await readLine();
-    if (slackAnswer.trim().toLowerCase() === "y") {
-      printSlackSetupGuide();
-      process.stderr.write("  Slack app client ID: ");
-      const clientId = (await readLine()).trim();
-      if (!clientId) {
-        error("Client ID is required. Skipping Slack setup.");
-      } else {
-        process.stderr.write("  Client secret env var [SLACK_CLIENT_SECRET]: ");
-        const secretEnv = (await readLine()).trim() || "SLACK_CLIENT_SECRET";
-        process.stderr.write("  Channels (comma-separated, e.g. #general, #eng): ");
-        const channelsRaw = (await readLine()).trim();
-        const channels = channelsRaw
-          ? channelsRaw.split(",").map((c) => c.trim()).filter(Boolean)
-          : [];
-        const slackInit: SlackOAuthInit = { client_id: clientId, client_secret_env: secretEnv, channels };
-        updateSlackConfig(slackInit);
-        log("Slack config saved.");
+  const slackAuthed = !!slackToken;
 
-        const clientSecret = resolveSecret(secretEnv);
-        if (clientSecret) {
-          process.stderr.write("\nRun Slack OAuth now? (Y/n) ");
-          const authAnswer = await readLine();
-          if (authAnswer.trim().toLowerCase() !== "n") {
-            await performSlackOAuth(clientId, clientSecret);
-          } else {
-            log('Run "reporter auth slack" later to complete Slack setup.');
-          }
-        } else {
-          log(`Set ${secretEnv} env var, then run "reporter auth slack".`);
-        }
-      }
-    }
-  }
+  const authedBuiltins: Record<string, boolean> = {
+    github: githubAuthed,
+    jira: jiraAuthed,
+    slack: slackAuthed,
+  };
 
-  // MCP server catalog
-  await promptMCPCatalog();
-}
+  // Print status for already-authenticated services
+  if (githubAuthed) log("GitHub: authenticated");
+  if (jiraAuthed) log("Jira: authenticated");
+  if (slackAuthed) log("Slack: authenticated");
 
-async function promptMCPCatalog() {
-  const existingConfig = loadMCPConfig();
-  const existingNames = new Set(Object.keys(existingConfig.mcpServers));
+  // 3. Build unified multiselect — skip authed builtins + already-configured MCP servers
+  const existingMCPConfig = loadMCPConfig();
+  const existingMCPNames = new Set(Object.keys(existingMCPConfig.mcpServers));
 
-  const available = MCP_CATALOG.filter((e) => !existingNames.has(e.name));
+  const available = MCP_CATALOG.filter((entry) => {
+    if (entry.builtin) return !authedBuiltins[entry.name];
+    return !existingMCPNames.has(entry.name);
+  });
+
   if (available.length === 0) return;
 
   process.stderr.write("\n");
@@ -177,7 +126,7 @@ async function promptMCPCatalog() {
   }));
 
   const result = await multiselect<CatalogEntry>({
-    message: "Add MCP servers?",
+    message: "Set up integrations",
     items,
   });
 
@@ -186,58 +135,108 @@ async function promptMCPCatalog() {
   }
 
   const selectedEntries = result as CatalogEntry[];
+
+  // 4. Process each selected entry
   const mcpConfig = loadMCPConfig();
   let addedCount = 0;
 
   for (const entry of selectedEntries) {
-    const def: MCPServerDef = {
-      type: entry.type,
-      command: entry.command,
-      args: [...entry.args],
-    };
-
-    let skip = false;
-
-    if (entry.prompts) {
-      const env: Record<string, string> = {};
-
-      for (const prompt of entry.prompts) {
-        process.stderr.write(
-          `  ${entry.label} — ${prompt.message}${prompt.placeholder ? ` (e.g. ${prompt.placeholder})` : ""}: `,
-        );
-        const value = (await readLine()).trim();
-
-        if (prompt.required && !value) {
-          error(`Required value missing. Skipping ${entry.label}.`);
-          skip = true;
-          break;
-        }
-
-        if (value) {
-          if (prompt.key === "args") {
-            def.args!.push(value);
-          } else if (prompt.key.startsWith("env.")) {
-            const envKey = prompt.key.slice(4);
-            env[envKey] = value;
-          }
-        }
-      }
-
-      if (skip) continue;
-      if (Object.keys(env).length > 0) {
-        def.env = env;
-      }
+    if (entry.builtin) {
+      await handleBuiltinSetup(entry, config);
+    } else {
+      const added = await handleCatalogSetup(entry, mcpConfig);
+      if (added) addedCount++;
     }
-
-    mcpConfig.mcpServers[entry.name] = def;
-    log(`Added ${entry.label}`);
-    addedCount++;
   }
 
   if (addedCount > 0) {
     saveMCPConfig(mcpConfig);
     log(`Saved ${addedCount} MCP server${addedCount > 1 ? "s" : ""} to ${getMCPConfigPath()}`);
   }
+}
+
+async function handleBuiltinSetup(entry: CatalogEntry, _config: ReturnType<typeof loadConfig>) {
+  process.stderr.write("\n");
+  switch (entry.name) {
+    case "github":
+      await loginGitHub();
+      break;
+    case "jira":
+      await cmdAuthLogin();
+      break;
+    case "slack": {
+      printSlackSetupGuide();
+
+      process.stderr.write("  Slack app client ID: ");
+      const clientId = (await readLine()).trim();
+      if (!clientId) {
+        error("Client ID is required. Skipping Slack setup.");
+        break;
+      }
+
+      process.stderr.write("  Client secret env var [SLACK_CLIENT_SECRET]: ");
+      const secretEnv = (await readLine()).trim() || "SLACK_CLIENT_SECRET";
+
+      process.stderr.write("  Channels (comma-separated, e.g. #general, #eng): ");
+      const channelsRaw = (await readLine()).trim();
+      const channels = channelsRaw
+        ? channelsRaw.split(",").map((c) => c.trim()).filter(Boolean)
+        : [];
+
+      const slackInit: SlackOAuthInit = { client_id: clientId, client_secret_env: secretEnv, channels };
+      updateSlackConfig(slackInit);
+      log("Slack config saved.");
+
+      const clientSecret = resolveSecret(secretEnv);
+      if (clientSecret) {
+        await performSlackOAuth(clientId, clientSecret);
+      } else {
+        log(`Set ${secretEnv} env var, then run "reporter auth slack".`);
+      }
+      break;
+    }
+  }
+}
+
+async function handleCatalogSetup(entry: CatalogEntry, mcpConfig: ReturnType<typeof loadMCPConfig>): Promise<boolean> {
+  const def: MCPServerDef = {
+    type: entry.type!,
+    command: entry.command!,
+    args: [...(entry.args ?? [])],
+  };
+
+  if (entry.prompts) {
+    const env: Record<string, string> = {};
+
+    for (const prompt of entry.prompts) {
+      process.stderr.write(
+        `  ${entry.label} — ${prompt.message}${prompt.placeholder ? ` (e.g. ${prompt.placeholder})` : ""}: `,
+      );
+      const value = (await readLine()).trim();
+
+      if (prompt.required && !value) {
+        error(`Required value missing. Skipping ${entry.label}.`);
+        return false;
+      }
+
+      if (value) {
+        if (prompt.key === "args") {
+          def.args!.push(value);
+        } else if (prompt.key.startsWith("env.")) {
+          const envKey = prompt.key.slice(4);
+          env[envKey] = value;
+        }
+      }
+    }
+
+    if (Object.keys(env).length > 0) {
+      def.env = env;
+    }
+  }
+
+  mcpConfig.mcpServers[entry.name] = def;
+  log(`Added ${entry.label}`);
+  return true;
 }
 
 function printSlackSetupGuide() {
@@ -251,24 +250,6 @@ function printSlackSetupGuide() {
   );
 }
 
-function readLine(): Promise<string> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-    const onData = (chunk: Buffer) => {
-      chunks.push(chunk);
-      const str = Buffer.concat(chunks).toString();
-      if (str.includes("\n")) {
-        process.stdin.removeListener("data", onData);
-        process.stdin.pause();
-        process.stdin.unref();
-        resolve(str.split("\n")[0]);
-      }
-    };
-    process.stdin.ref();
-    process.stdin.resume();
-    process.stdin.on("data", onData);
-  });
-}
 
 async function cmdAuth() {
   const subcommand = args[1];
@@ -393,20 +374,36 @@ async function cmdAuthSlack() {
 
 async function cmdLogin() {
   const service = args[1];
-  if (service !== "github") {
-    console.log('Usage: reporter login github');
-    process.exit(1);
+  switch (service) {
+    case "github":
+      return loginGitHub();
+    case "anthropic":
+      if (args.includes("--max")) {
+        return loginAnthropicMax();
+      }
+      return loginAnthropicApiKey();
+    default:
+      console.log(`Usage:
+  reporter login github               Authenticate with GitHub via browser OAuth
+  reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)
+  reporter login anthropic --max       Authenticate with Anthropic Pro/Max subscription`);
+      process.exit(1);
   }
-  await loginGitHub();
 }
 
 async function cmdLogout() {
   const service = args[1];
-  if (service !== "github") {
-    console.log('Usage: reporter logout github');
-    process.exit(1);
+  switch (service) {
+    case "github":
+      return logoutGitHub();
+    case "anthropic":
+      return logoutAnthropic();
+    default:
+      console.log(`Usage:
+  reporter logout github      Remove stored GitHub token
+  reporter logout anthropic   Remove stored Anthropic tokens`);
+      process.exit(1);
   }
-  logoutGitHub();
 }
 
 async function cmdRun() {
@@ -675,26 +672,29 @@ function cmdHelp() {
   console.log(`reporter — AI-powered daily work report generator
 
 Commands:
-  reporter init                    Create config at ~/reporter/config.toml
-  reporter auth login              Authenticate with Atlassian (Jira) via browser OAuth
-  reporter auth logout             Remove stored Atlassian tokens
-  reporter auth status             Show Atlassian authentication status
-  reporter auth slack              Authenticate with Slack via browser OAuth
-  reporter login github            Authenticate with GitHub via browser OAuth
-  reporter logout github           Remove stored GitHub token
-  reporter run                     Generate report (stdout)
-  reporter run --dry               List available tools, skip LLM
-  reporter run --no-save           Don't save report to disk
-  reporter mcp add <name> ...      Add a custom MCP server
-  reporter mcp remove <name>       Remove a custom MCP server
-  reporter mcp list                List custom MCP servers
-  reporter history                 List past reports
-  reporter schedule --every "9am"  Show crontab entry for scheduling
-  reporter schedule --every "*/15m" Every N minutes
-  reporter schedule --every "*/6h"  Every N hours
+  reporter init                        Create config at ~/reporter/config.toml
+  reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)
+  reporter login anthropic --max       Authenticate with Anthropic Pro/Max subscription
+  reporter logout anthropic            Remove stored Anthropic tokens
+  reporter login github                Authenticate with GitHub via browser OAuth
+  reporter logout github               Remove stored GitHub token
+  reporter auth login                  Authenticate with Atlassian (Jira) via browser OAuth
+  reporter auth logout                 Remove stored Atlassian tokens
+  reporter auth status                 Show Atlassian authentication status
+  reporter auth slack                  Authenticate with Slack via browser OAuth
+  reporter run                         Generate report (stdout)
+  reporter run --dry                   List available tools, skip LLM
+  reporter run --no-save               Don't save report to disk
+  reporter mcp add <name> ...          Add a custom MCP server
+  reporter mcp remove <name>           Remove a custom MCP server
+  reporter mcp list                    List custom MCP servers
+  reporter history                     List past reports
+  reporter schedule --every "9am"      Show crontab entry for scheduling
+  reporter schedule --every "*/15m"    Every N minutes
+  reporter schedule --every "*/6h"     Every N hours
 
 Environment:
-  ANTHROPIC_API_KEY    Claude API key
+  ANTHROPIC_API_KEY    Claude API key (optional if using "reporter login anthropic")
   GITHUB_TOKEN         GitHub token (optional if using "reporter login github")
   SLACK_BOT_TOKEN      Slack bot token (optional if using "reporter auth slack")
   REPORTER_DEBUG       Set to 1 for debug logging`);

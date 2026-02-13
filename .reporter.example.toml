@@ -1,7 +1,9 @@
 [llm]
 provider = "anthropic"
 model = "claude-sonnet-4-5-20250929"
-api_key_env = "ANTHROPIC_API_KEY"
+# Auth: run "reporter login anthropic" for browser-based OAuth (recommended)
+# Or set an API key — env var name like "ANTHROPIC_API_KEY" or the key directly
+# api_key_env = "ANTHROPIC_API_KEY"
 
 [github]
 enabled = true

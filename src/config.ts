@@ -7,7 +7,7 @@ import { loadStoredGitHubToken } from "./auth/github.js";
 export interface LLMConfig {
   provider: "anthropic";
   model: string;
-  api_key_env: string;
+  api_key_env?: string;
 }
 
 export interface GitHubConfig {
@@ -82,8 +82,9 @@ export function loadConfig(): Config {
 const DEFAULT_CONFIG = `[llm]
 provider = "anthropic"
 model = "claude-sonnet-4-5-20250929"
-# Anthropic API key — env var name like "ANTHROPIC_API_KEY" or the key directly
-api_key_env = "ANTHROPIC_API_KEY"
+# Auth: run "reporter login anthropic" for browser-based OAuth (recommended)
+# Or set an API key — env var name like "ANTHROPIC_API_KEY" or the key directly
+# api_key_env = "ANTHROPIC_API_KEY"
 
 [github]
 enabled = true
