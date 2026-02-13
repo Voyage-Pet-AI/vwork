@@ -46,7 +46,7 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
-          repository: Voyage-Pet-AI/homebrew-tap
+          repository: riricardoMa/homebrew-tap
           event-type: update-formula
           client-payload: |
             {
