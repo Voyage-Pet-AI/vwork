@@ -11,7 +11,7 @@ const SCOPES = "channels:history,channels:read,users:read,search:read";
  * 1. Start local HTTP server for callback
  * 2. Open browser to Slack authorize URL
  * 3. Receive code via callback, exchange for token
- * 4. Save token to ~/contxt/tokens.json
+ * 4. Save token to ~/reporter/tokens.json
  */
 export async function performSlackOAuth(
   clientId: string,
@@ -147,7 +147,7 @@ export async function performSlackOAuth(
 function htmlPage(title: string, body: string): string {
   return `<!DOCTYPE html>
 <html>
-<head><title>Contxt — ${title}</title>
+<head><title>Reporter — ${title}</title>
 <style>body{font-family:system-ui;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#f5f5f5}
 .card{background:#fff;padding:2rem 3rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center}
 h1{margin:0 0 .5rem}</style></head>

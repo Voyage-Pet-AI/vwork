@@ -26,7 +26,7 @@ export function getEnabledServers(config: Config): ServerEntry[] {
     const token = resolveGitHubToken(config);
     if (!token) {
       throw new Error(
-        `GitHub enabled but token not configured — run "contxt login github" or set token_env in config`
+        `GitHub enabled but token not configured — run "reporter login github" or set token_env in config`
       );
     }
     servers.push({
@@ -41,7 +41,7 @@ export function getEnabledServers(config: Config): ServerEntry[] {
   if (config.jira.enabled) {
     if (!hasAtlassianAuth()) {
       throw new Error(
-        `Jira enabled but not authenticated — run "contxt auth login" first`
+        `Jira enabled but not authenticated — run "reporter auth login" first`
       );
     }
     servers.push({
@@ -58,7 +58,7 @@ export function getEnabledServers(config: Config): ServerEntry[] {
       : getSlackToken();
     if (!token) {
       throw new Error(
-        `Slack enabled but token not configured — run "contxt auth slack" for OAuth or set token_env in config`
+        `Slack enabled but token not configured — run "reporter auth slack" for OAuth or set token_env in config`
       );
     }
     servers.push({

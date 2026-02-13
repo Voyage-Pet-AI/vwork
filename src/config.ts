@@ -43,11 +43,11 @@ export interface Config {
   report: ReportConfig;
 }
 
-const CONTXT_DIR = join(homedir(), "contxt");
-const CONFIG_PATH = join(CONTXT_DIR, "config.toml");
+const REPORTER_DIR = join(homedir(), "reporter");
+const CONFIG_PATH = join(REPORTER_DIR, "config.toml");
 
-export function getContxtDir(): string {
-  return CONTXT_DIR;
+export function getReporterDir(): string {
+  return REPORTER_DIR;
 }
 
 export function getConfigPath(): string {
@@ -61,7 +61,7 @@ export function configExists(): boolean {
 export function loadConfig(): Config {
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(
-      `Config not found at ${CONFIG_PATH}. Run "contxt init" first.`
+      `Config not found at ${CONFIG_PATH}. Run "reporter init" first.`
     );
   }
 
@@ -87,7 +87,7 @@ api_key_env = "ANTHROPIC_API_KEY"
 
 [github]
 enabled = true
-# Auth: run "contxt login github" for browser-based OAuth (recommended)
+# Auth: run "reporter login github" for browser-based OAuth (recommended)
 # Or set a token manually — env var name like "GITHUB_TOKEN" or the token directly
 # token_env = "GITHUB_TOKEN"
 # GitHub orgs to pull activity from, e.g. ["my-company", "my-oss-org"]
@@ -95,12 +95,12 @@ orgs = []
 
 [jira]
 enabled = false
-# Run "contxt auth login" before enabling
+# Run "reporter auth login" before enabling
 url = "https://mcp.atlassian.com/v1/mcp"
 
 [slack]
 enabled = false
-# Option 1 (recommended): OAuth — run "contxt auth slack" for browser-based login
+# Option 1 (recommended): OAuth — run "reporter auth slack" for browser-based login
 # client_id = "your-slack-app-client-id"
 # client_secret_env = "SLACK_CLIENT_SECRET"
 # Option 2: Manual token — env var name like "SLACK_BOT_TOKEN" or the token directly
@@ -112,7 +112,7 @@ channels = []
 # How many days back to look for activity (1 = daily, 7 = weekly)
 lookback_days = 1
 # Where to save generated reports
-output_dir = "~/contxt/reports"
+output_dir = "~/reporter/reports"
 # Number of past reports to include as context for continuity
 memory_depth = 5
 `;
@@ -130,7 +130,7 @@ export function resolveSecret(value: string): string | undefined {
 
 /**
  * Resolve GitHub token with precedence:
- * 1. OAuth stored token (from `contxt login github`)
+ * 1. OAuth stored token (from `reporter login github`)
  * 2. token_env (env var name or literal token from config)
  * 3. undefined
  */
@@ -152,9 +152,9 @@ export interface SlackOAuthInit {
 }
 
 export function initConfig(slackOAuth?: SlackOAuthInit): string {
-  mkdirSync(CONTXT_DIR, { recursive: true });
-  mkdirSync(join(CONTXT_DIR, "reports"), { recursive: true });
-  mkdirSync(join(CONTXT_DIR, "auth"), { recursive: true });
+  mkdirSync(REPORTER_DIR, { recursive: true });
+  mkdirSync(join(REPORTER_DIR, "reports"), { recursive: true });
+  mkdirSync(join(REPORTER_DIR, "auth"), { recursive: true });
 
   if (existsSync(CONFIG_PATH)) {
     return `Config already exists at ${CONFIG_PATH}`;

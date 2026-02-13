@@ -1,10 +1,10 @@
 {
-  "name": "contxt",
+  "name": "reporter",
   "version": "0.1.0",
   "description": "AI-powered daily work report generator",
   "type": "module",
   "bin": {
-    "contxt": "src/index.ts"
+    "reporter": "src/index.ts"
   },
   "scripts": {
     "start": "bun src/index.ts",
