@@ -38,8 +38,13 @@ export class MCPClientManager {
 
         let transport: Transport;
 
-        if (entry.transport === "http") {
-          transport = await this.connectHttp(entry.url);
+        if (entry.transport === "http" && entry.auth === "atlassian") {
+          transport = await this.connectHttpWithAuth(entry.url);
+        } else if (entry.transport === "http") {
+          transport = new StreamableHTTPClientTransport(
+            new URL(entry.url),
+            entry.headers ? { requestInit: { headers: entry.headers } } : undefined
+          );
         } else {
           transport = new StdioClientTransport({
             command: entry.command,
@@ -76,7 +81,7 @@ export class MCPClientManager {
     }
   }
 
-  private async connectHttp(url: string): Promise<StreamableHTTPClientTransport> {
+  private async connectHttpWithAuth(url: string): Promise<StreamableHTTPClientTransport> {
     const provider = new AtlassianOAuthProvider();
     const transport = new StreamableHTTPClientTransport(
       new URL(url),

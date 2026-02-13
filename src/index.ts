@@ -19,6 +19,7 @@ import { waitForOAuthCallback } from "./auth/callback.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { loadMCPConfig, saveMCPConfig, mcpConfigToServers, getMCPConfigPath, type MCPServerDef } from "./mcp/config.js";
 import { log, error } from "./utils/log.js";
 
 const args = process.argv.slice(2);
@@ -36,6 +37,8 @@ async function main() {
       return cmdLogin();
     case "logout":
       return cmdLogout();
+    case "mcp":
+      return cmdMcp();
     case "history":
       return cmdHistory();
     case "schedule":
@@ -335,6 +338,18 @@ async function cmdRun() {
 
   // Spawn MCP servers
   const servers = getEnabledServers(config);
+
+  // Merge custom MCP servers from .mcp.json
+  let customServerNames: string[] = [];
+  try {
+    const mcpConfig = loadMCPConfig();
+    const customServers = mcpConfigToServers(mcpConfig);
+    customServerNames = customServers.map((s) => s.name);
+    servers.push(...customServers);
+  } catch (e) {
+    error(`Failed to load .mcp.json: ${e instanceof Error ? e.message : e}`);
+  }
+
   if (servers.length === 0) {
     error("No integrations enabled. Edit your config: " + getConfigPath());
     process.exit(1);
@@ -362,7 +377,7 @@ async function cmdRun() {
 
     // Build prompt with memory
     const pastReports = loadPastReports(config);
-    const systemPrompt = buildSystemPrompt(config, pastReports);
+    const systemPrompt = buildSystemPrompt(config, pastReports, customServerNames);
     const userMessage = buildUserMessage(config);
 
     // Run the agentic loop
@@ -379,6 +394,139 @@ async function cmdRun() {
     }
   } finally {
     await mcpClient.disconnect();
+  }
+}
+
+function cmdMcp() {
+  const subcommand = args[1];
+
+  switch (subcommand) {
+    case "add":
+      return cmdMcpAdd();
+    case "remove":
+      return cmdMcpRemove();
+    case "list":
+      return cmdMcpList();
+    default:
+      console.log(`Usage:
+  reporter mcp add <name> --transport stdio -- <cmd> [args]   Add stdio server
+  reporter mcp add <name> --transport http <url>              Add HTTP server
+  reporter mcp add <name> -e KEY=VAL -e KEY2=VAL2             With env vars
+  reporter mcp remove <name>                                  Remove a server
+  reporter mcp list                                           List servers`);
+      process.exit(1);
+  }
+}
+
+function cmdMcpAdd() {
+  const name = args[2];
+  if (!name) {
+    error("Missing server name. Usage: reporter mcp add <name> ...");
+    process.exit(1);
+  }
+
+  // Parse --transport
+  const transportIdx = args.indexOf("--transport");
+  const transport = transportIdx !== -1 ? args[transportIdx + 1] : undefined;
+  if (transport !== "stdio" && transport !== "http") {
+    error('Missing or invalid --transport. Must be "stdio" or "http".');
+    process.exit(1);
+  }
+
+  // Parse -e / --env flags
+  const envVars: Record<string, string> = {};
+  for (let i = 2; i < args.length; i++) {
+    if (args[i] === "-e" || args[i] === "--env") {
+      const pair = args[i + 1];
+      if (!pair || !pair.includes("=")) {
+        error(`Invalid env format: ${pair}. Use KEY=VALUE.`);
+        process.exit(1);
+      }
+      const eqIdx = pair.indexOf("=");
+      envVars[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1);
+      i++; // skip value
+    }
+  }
+
+  const config = loadMCPConfig();
+  const def: MCPServerDef = { type: transport };
+
+  if (transport === "stdio") {
+    // Everything after "--" is the command + args
+    const dashDash = args.indexOf("--");
+    if (dashDash === -1 || !args[dashDash + 1]) {
+      error("Stdio transport requires: -- <command> [args...]");
+      process.exit(1);
+    }
+    def.command = args[dashDash + 1];
+    def.args = args.slice(dashDash + 2);
+    if (Object.keys(envVars).length > 0) {
+      def.env = envVars;
+    }
+  } else {
+    // HTTP: the URL is the last positional arg (not a flag value)
+    // Find the URL — it's after --transport http and not a flag
+    let url: string | undefined;
+    for (let i = 2; i < args.length; i++) {
+      if (args[i] === "--transport" || args[i] === "-e" || args[i] === "--env") {
+        i++; // skip value
+        continue;
+      }
+      if (args[i] === name) continue;
+      if (args[i].startsWith("-")) continue;
+      url = args[i];
+    }
+    if (!url) {
+      error("HTTP transport requires a URL. Usage: reporter mcp add <name> --transport http <url>");
+      process.exit(1);
+    }
+    def.url = url;
+    if (Object.keys(envVars).length > 0) {
+      // Store env vars as headers for HTTP (common pattern: Authorization tokens)
+      def.headers = envVars;
+    }
+  }
+
+  config.mcpServers[name] = def;
+  saveMCPConfig(config);
+  log(`Added MCP server "${name}" (${transport})`);
+}
+
+function cmdMcpRemove() {
+  const name = args[2];
+  if (!name) {
+    error("Missing server name. Usage: reporter mcp remove <name>");
+    process.exit(1);
+  }
+
+  const config = loadMCPConfig();
+  if (!config.mcpServers[name]) {
+    error(`No MCP server named "${name}" found.`);
+    process.exit(1);
+  }
+
+  delete config.mcpServers[name];
+  saveMCPConfig(config);
+  log(`Removed MCP server "${name}"`);
+}
+
+function cmdMcpList() {
+  const config = loadMCPConfig();
+  const servers = Object.entries(config.mcpServers);
+
+  if (servers.length === 0) {
+    console.log("No custom MCP servers configured.");
+    console.log(`Add one with: reporter mcp add <name> --transport stdio -- <cmd>`);
+    return;
+  }
+
+  console.log("Custom MCP servers:");
+  for (const [name, def] of servers) {
+    if (def.type === "stdio") {
+      console.log(`  ${name} (stdio): ${def.command} ${(def.args ?? []).join(" ")}`);
+    } else {
+      console.log(`  ${name} (http): ${def.url}`);
+    }
   }
 }
 
@@ -454,6 +602,9 @@ Commands:
   reporter run                     Generate report (stdout)
   reporter run --dry               List available tools, skip LLM
   reporter run --no-save           Don't save report to disk
+  reporter mcp add <name> ...      Add a custom MCP server
+  reporter mcp remove <name>       Remove a custom MCP server
+  reporter mcp list                List custom MCP servers
   reporter history                 List past reports
   reporter schedule --every "9am"  Show crontab entry for scheduling
   reporter schedule --every "*/15m" Every N minutes

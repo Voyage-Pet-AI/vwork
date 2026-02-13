@@ -15,6 +15,8 @@ export interface HttpServerEntry {
   name: string;
   transport: "http";
   url: string;
+  auth?: "atlassian";
+  headers?: Record<string, string>;
 }
 
 export type ServerEntry = StdioServerEntry | HttpServerEntry;
@@ -48,6 +50,7 @@ export function getEnabledServers(config: Config): ServerEntry[] {
       name: "jira",
       transport: "http",
       url: config.jira.url,
+      auth: "atlassian",
     });
   }
 
