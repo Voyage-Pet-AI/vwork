@@ -50,7 +50,8 @@ export interface LLMProvider {
     systemPrompt: string,
     messages: Message[],
     tools: LLMTool[],
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
+    signal?: AbortSignal
   ): Promise<LLMResponse>;
 
   // Build the appropriate message types for the provider

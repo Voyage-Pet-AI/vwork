@@ -125,7 +125,8 @@ export class AnthropicProvider implements LLMProvider {
     systemPrompt: string,
     messages: Message[],
     tools: LLMTool[],
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
+    signal?: AbortSignal
   ): Promise<LLMResponse> {
     await this.ensureFreshToken();
 
@@ -143,12 +144,20 @@ export class AnthropicProvider implements LLMProvider {
       tools: anthropicTools.length > 0 ? anthropicTools : undefined,
     });
 
+    if (signal) {
+      if (signal.aborted) stream.abort();
+      else signal.addEventListener("abort", () => stream.abort(), { once: true });
+    }
+
     stream.on("text", (delta) => callbacks.onText(delta));
 
     let finalMessage: Anthropic.Message;
     try {
       finalMessage = await stream.finalMessage();
     } catch (e) {
+      if (signal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
       const err = e instanceof Error ? e : new Error(String(e));
       callbacks.onError(err);
       throw err;

@@ -38,18 +38,47 @@ export class ChatSession {
   }
 
   /** Send a user message and stream the response. Handles tool call loops internally. */
-  async send(userMessage: string, callbacks: StreamCallbacks): Promise<void> {
+  async send(userMessage: string, callbacks: StreamCallbacks, signal?: AbortSignal): Promise<void> {
     this.messages.push({ role: "user", content: userMessage });
 
+    let partialText = "";
+    const wrappedCallbacks: StreamCallbacks = {
+      ...callbacks,
+      onText: (delta: string) => {
+        partialText += delta;
+        callbacks.onText(delta);
+      },
+    };
+
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      if (signal?.aborted) return;
+
       debug(`Chat round ${round + 1}/${MAX_TOOL_ROUNDS}`);
 
-      const response = await this.provider.chatStream(
-        this.systemPrompt,
-        this.messages,
-        this.tools,
-        callbacks
-      );
+      let response;
+      try {
+        response = await this.provider.chatStream(
+          this.systemPrompt,
+          this.messages,
+          this.tools,
+          wrappedCallbacks,
+          signal
+        );
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          // Save partial response to history so context isn't lost
+          if (partialText) {
+            this.messages.push({
+              role: "assistant",
+              content: [{ type: "text", text: partialText + "\n[aborted]" }],
+            });
+          }
+          return;
+        }
+        throw e;
+      }
+
+      partialText = ""; // Reset for next round
 
       // Always append assistant message to history
       this.messages.push(this.provider.makeAssistantMessage(response));
@@ -62,6 +91,9 @@ export class ChatSession {
       // Execute tool calls
       const results = await Promise.all(
         response.tool_calls.map(async (tc) => {
+          if (signal?.aborted) {
+            return { tool_use_id: tc.id, content: "Aborted", is_error: true as const };
+          }
           callbacks.onToolStart(tc);
           try {
             let result: string;
@@ -81,6 +113,8 @@ export class ChatSession {
           }
         })
       );
+
+      if (signal?.aborted) return;
 
       this.messages.push(this.provider.makeToolResultMessage(results));
       // Loop continues — next iteration streams the next LLM response

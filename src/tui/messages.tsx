@@ -25,6 +25,7 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
     return (
       <Box marginTop={1}>
         <Text color="cyan" bold>{"❯ "}{message.content}</Text>
+        {message.queued && <Text color="yellow" bold>{" "}QUEUED</Text>}
       </Box>
     );
   }
@@ -54,4 +55,14 @@ export function CompletedMessages({ messages }: { messages: DisplayMessage[] }) 
 export function ActiveMessage({ message }: { message: DisplayMessage | null }) {
   if (!message) return null;
   return <MessageBubble message={message} />;
+}
+
+export function QueuedMessages({ messages }: { messages: DisplayMessage[] }) {
+  return (
+    <>
+      {messages.map((message) => (
+        <MessageBubble key={message.id} message={message} />
+      ))}
+    </>
+  );
 }

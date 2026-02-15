@@ -10,6 +10,7 @@ export interface DisplayMessage {
   role: "user" | "assistant";
   content: string;
   toolCalls: DisplayToolCall[];
+  queued?: boolean;
 }
 
 export type AppStatus = "idle" | "streaming" | "tool_running";

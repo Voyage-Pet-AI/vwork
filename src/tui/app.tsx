@@ -4,7 +4,7 @@ import type { ChatSession } from "../chat/session.js";
 import type { StreamCallbacks, ToolCall } from "../llm/provider.js";
 import type { DisplayMessage, DisplayToolCall, AppStatus, ConnectedService } from "./types.js";
 import { Header } from "./header.js";
-import { CompletedMessages, ActiveMessage } from "./messages.js";
+import { CompletedMessages, ActiveMessage, QueuedMessages } from "./messages.js";
 import { ChatInput } from "./input.js";
 
 interface AppProps {
@@ -22,9 +22,11 @@ function App({ session, services, onExit }: AppProps) {
   const [completedMessages, setCompletedMessages] = useState<DisplayMessage[]>([]);
   const [activeMessage, setActiveMessage] = useState<DisplayMessage | null>(null);
   const [status, setStatus] = useState<AppStatus>("idle");
+  const [queuedMessages, setQueuedMessages] = useState<DisplayMessage[]>([]);
 
   const activeRef = useRef<DisplayMessage | null>(null);
   const hadActiveRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (activeMessage) {
@@ -48,18 +50,13 @@ function App({ session, services, onExit }: AppProps) {
       activeRef.current = null;
       setActiveMessage(null);
     }
+    abortRef.current = null;
     setStatus("idle");
   }, []);
 
-  const handleSend = useCallback(async (text: string) => {
-    // Add user message to completed
-    const userMsg: DisplayMessage = {
-      id: nextId(),
-      role: "user",
-      content: text,
-      toolCalls: [],
-    };
-    setCompletedMessages((prev) => [...prev, userMsg]);
+  const processMessage = useCallback(async (text: string) => {
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     // Create active assistant message
     const assistantMsg: DisplayMessage = {
@@ -105,7 +102,6 @@ function App({ session, services, onExit }: AppProps) {
       },
       onError: (err: Error) => {
         if (activeRef.current) {
-          // Mark any running tool calls as error
           for (const tc of activeRef.current.toolCalls) {
             if (tc.status === "running") tc.status = "error";
           }
@@ -116,9 +112,14 @@ function App({ session, services, onExit }: AppProps) {
     };
 
     try {
-      await session.send(text, callbacks);
+      await session.send(text, callbacks, controller.signal);
     } catch (err) {
-      if (activeRef.current) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        if (activeRef.current) {
+          activeRef.current.content += "\n[aborted]";
+          setActiveMessage({ ...activeRef.current });
+        }
+      } else if (activeRef.current) {
         activeRef.current.content += `\nError: ${err instanceof Error ? err.message : String(err)}`;
         setActiveMessage({ ...activeRef.current });
       }
@@ -127,11 +128,62 @@ function App({ session, services, onExit }: AppProps) {
     finalizeActive();
   }, [session, finalizeActive]);
 
+  const handleSend = useCallback((text: string) => {
+    const isBusy = status !== "idle";
+
+    if (isBusy) {
+      // Queue the message
+      const userMsg: DisplayMessage = {
+        id: nextId(),
+        role: "user",
+        content: text,
+        toolCalls: [],
+        queued: true,
+      };
+      setQueuedMessages((prev) => [...prev, userMsg]);
+      return;
+    }
+
+    // Add user message to completed and process
+    const userMsg: DisplayMessage = {
+      id: nextId(),
+      role: "user",
+      content: text,
+      toolCalls: [],
+    };
+    setCompletedMessages((prev) => [...prev, userMsg]);
+    processMessage(text);
+  }, [status, processMessage]);
+
+  const abort = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  // Dequeue: when idle and there are queued messages, process the next one
+  useEffect(() => {
+    if (status !== "idle" || queuedMessages.length === 0) return;
+
+    const [next, ...rest] = queuedMessages;
+    setQueuedMessages(rest);
+
+    // Move to completed without the queued flag
+    const userMsg: DisplayMessage = {
+      id: next.id,
+      role: "user",
+      content: next.content,
+      toolCalls: [],
+    };
+    setCompletedMessages((prev) => [...prev, userMsg]);
+    processMessage(next.content);
+  }, [status, queuedMessages, processMessage]);
+
   const handleClear = useCallback(() => {
     session.clear();
     setCompletedMessages([]);
     setActiveMessage(null);
+    setQueuedMessages([]);
     activeRef.current = null;
+    abortRef.current = null;
     setStatus("idle");
   }, [session]);
 
@@ -150,9 +202,11 @@ function App({ session, services, onExit }: AppProps) {
       <Header services={services} />
       <CompletedMessages messages={completedMessages} />
       <ActiveMessage message={activeMessage} />
+      <QueuedMessages messages={queuedMessages} />
       <ChatInput
         status={status}
         onSubmit={handleSend}
+        onAbort={abort}
         onExit={onExit}
         onClear={handleClear}
         onHelp={handleHelp}
