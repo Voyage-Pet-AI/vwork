@@ -57,7 +57,7 @@ interface ChatInputProps {
   onCopy: () => void;
   onSchedule: (subcommand: string) => void;
   onModel: () => void;
-  onConnect: (provider: string) => void;
+  onConnect: (provider: string) => void | Promise<void>;
 }
 
 export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel, onConnect }: ChatInputProps) {

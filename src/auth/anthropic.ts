@@ -57,11 +57,14 @@ interface StoredOAuth {
   created_at: string;
 }
 
-// --- OAuth → API Key flow (platform.claude.com) ---
+// --- Split login: URL generation + code exchange ---
 
-export async function loginAnthropicApiKey(): Promise<void> {
-  log("Starting Anthropic OAuth login (API key)...");
+export interface AnthropicLoginHandle {
+  authUrl: string;
+  complete: (rawCode: string) => Promise<void>;
+}
 
+export async function startAnthropicLogin(): Promise<AnthropicLoginHandle> {
   const { verifier, challenge } = await generatePKCE();
   const state = randomState();
 
@@ -75,7 +78,74 @@ export async function loginAnthropicApiKey(): Promise<void> {
   authUrl.searchParams.set("code_challenge_method", "S256");
   authUrl.searchParams.set("state", state);
 
-  process.stderr.write(`\nVisit this URL to authorize:\n  ${authUrl}\n\n`);
+  return {
+    authUrl: authUrl.toString(),
+    complete: async (rawCode: string) => {
+      // Anthropic returns code#state — split if present
+      const code = rawCode.split("#")[0];
+
+      // Exchange code for token
+      log("Exchanging authorization code...");
+      const tokenRes = await fetch(TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: CLIENT_ID,
+          code,
+          redirect_uri: MANUAL_REDIRECT_URL,
+          code_verifier: verifier,
+          state,
+        }),
+      });
+
+      if (!tokenRes.ok) {
+        const body = await tokenRes.text();
+        throw new Error(`Token exchange failed (${tokenRes.status}): ${body}`);
+      }
+
+      const tokenData = await tokenRes.json() as { access_token: string };
+
+      // Create a permanent API key
+      log("Creating API key...");
+      const keyRes = await fetch(API_KEY_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "reporter-cli" }),
+      });
+
+      if (!keyRes.ok) {
+        const body = await keyRes.text();
+        throw new Error(`API key creation failed (${keyRes.status}): ${body}`);
+      }
+
+      const keyData = await keyRes.json() as { api_key: string };
+
+      // Store key
+      const stored: StoredApiKey = {
+        api_key: keyData.api_key,
+        created_at: new Date().toISOString(),
+      };
+      const keyPath = KEY_FILE();
+      writeFileSync(keyPath, JSON.stringify(stored, null, 2));
+      chmodSync(keyPath, 0o600);
+
+      log("Anthropic API key created and stored.");
+    },
+  };
+}
+
+// --- OAuth → API Key flow (platform.claude.com) ---
+
+export async function loginAnthropicApiKey(): Promise<void> {
+  log("Starting Anthropic OAuth login (API key)...");
+
+  const handle = await startAnthropicLogin();
+
+  process.stderr.write(`\nVisit this URL to authorize:\n  ${handle.authUrl}\n\n`);
   process.stderr.write(
     "After clicking Authorize, copy the code from the browser and paste it here: "
   );
@@ -84,59 +154,7 @@ export async function loginAnthropicApiKey(): Promise<void> {
     throw new Error("No authorization code provided.");
   }
 
-  // Anthropic returns code#state — split if present
-  const code = rawCode.split("#")[0];
-
-  // Exchange code for token
-  log("Exchanging authorization code...");
-  const tokenRes = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      code,
-      redirect_uri: MANUAL_REDIRECT_URL,
-      code_verifier: verifier,
-      state,
-    }),
-  });
-
-  if (!tokenRes.ok) {
-    const body = await tokenRes.text();
-    throw new Error(`Token exchange failed (${tokenRes.status}): ${body}`);
-  }
-
-  const tokenData = await tokenRes.json() as { access_token: string };
-
-  // Create a permanent API key
-  log("Creating API key...");
-  const keyRes = await fetch(API_KEY_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${tokenData.access_token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ name: "reporter-cli" }),
-  });
-
-  if (!keyRes.ok) {
-    const body = await keyRes.text();
-    throw new Error(`API key creation failed (${keyRes.status}): ${body}`);
-  }
-
-  const keyData = await keyRes.json() as { api_key: string };
-
-  // Store key
-  const stored: StoredApiKey = {
-    api_key: keyData.api_key,
-    created_at: new Date().toISOString(),
-  };
-  const keyPath = KEY_FILE();
-  writeFileSync(keyPath, JSON.stringify(stored, null, 2));
-  chmodSync(keyPath, 0o600);
-
-  log("Anthropic API key created and stored.");
+  await handle.complete(rawCode);
 }
 
 // --- Token refresh ---
