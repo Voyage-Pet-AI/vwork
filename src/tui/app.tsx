@@ -9,7 +9,7 @@ import { ChatInput } from "./input.js";
 import { parseFileMentions, resolveFileMentions, buildMessageWithFiles } from "./file-mentions.js";
 import { toolCallSummary, friendlyToolName, toolResultSummary } from "./tool-summary.js";
 import { listSchedules, addSchedule, removeSchedule } from "../schedule/store.js";
-import { installCrontabEntry, removeCrontabEntry, parseTimeExpression } from "../schedule/crontab.js";
+import { installCrontabEntry, removeCrontabEntry, parseTimeExpression, getNextRun, formatTimeUntil } from "../schedule/crontab.js";
 
 interface AppProps {
   session: ChatSession;
@@ -296,9 +296,11 @@ function App({ session, services, onExit, clearOutput }: AppProps) {
       if (schedules.length === 0) {
         addSystemMessage("No schedules yet. Use `/schedule add` to create one.");
       } else {
-        const lines = schedules.map(
-          (s) => `  **${s.name}** — ${s.frequencyLabel} (cron: \`${s.cron}\`)`
-        );
+        const lines = schedules.map((s) => {
+          const next = getNextRun(s.cron);
+          const eta = next ? formatTimeUntil(next) : "unknown";
+          return `  **${s.name}** — ${s.frequencyLabel} (next in ${eta})`;
+        });
         addSystemMessage("Scheduled reports:\n" + lines.join("\n"));
       }
       return;
