@@ -2,6 +2,7 @@ export interface DisplayToolCall {
   id: string;
   name: string;
   displayName: string; // "github → search_issues"
+  summary: string;     // e.g. "ls -la /foo" for bash, "/path" for read_file
   status: "running" | "done" | "error";
 }
 

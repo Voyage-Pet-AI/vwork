@@ -7,6 +7,7 @@ import { Header } from "./header.js";
 import { CompletedMessages, ActiveMessage, QueuedMessages } from "./messages.js";
 import { ChatInput } from "./input.js";
 import { parseFileMentions, resolveFileMentions, buildMessageWithFiles } from "./file-mentions.js";
+import { toolCallSummary } from "./tool-summary.js";
 
 interface AppProps {
   session: ChatSession;
@@ -84,6 +85,7 @@ function App({ session, services, onExit }: AppProps) {
             id: tc.id,
             name: tc.name,
             displayName: tc.name.replace("__", " → "),
+            summary: toolCallSummary(tc),
             status: "running",
           };
           activeRef.current.toolCalls.push(displayTc);

@@ -41,13 +41,49 @@ export async function promptSlackToken(): Promise<void> {
   log("Slack token saved.");
 }
 
+const SLACK_APP_MANIFEST = {
+  display_information: {
+    name: "Reporter",
+    description: "AI-powered work reporting assistant",
+  },
+  features: {
+    bot_user: {
+      display_name: "reporter",
+      always_online: false,
+    },
+  },
+  oauth_config: {
+    scopes: {
+      bot: ["channels:history", "channels:read", "users:read", "search:read"],
+    },
+  },
+  settings: {
+    org_deploy_enabled: false,
+    socket_mode_enabled: false,
+  },
+};
+
+function getManifestUrl(): string {
+  const encoded = encodeURIComponent(JSON.stringify(SLACK_APP_MANIFEST));
+  return `https://api.slack.com/apps?new_app=1&manifest_json=${encoded}`;
+}
+
 function printSlackSetupGuide() {
+  const manifestUrl = getManifestUrl();
+  const manifestJson = JSON.stringify(SLACK_APP_MANIFEST, null, 2);
+
   console.error(
-    `\n  To set up Slack:\n` +
-    `  1. Go to https://api.slack.com/apps → "Create New App" → "From scratch"\n` +
-    `  2. Go to "OAuth & Permissions" → under "Bot Token Scopes", add:\n` +
-    `     channels:history, channels:read, users:read, search:read\n` +
-    `  3. Click "Install to Workspace" and approve the permissions\n` +
-    `  4. Copy the "Bot User OAuth Token" (starts with xoxb-)\n`
+    `\n  To set up Slack:\n\n` +
+    `  Option A — Create app with one click (recommended):\n` +
+    `  Open this URL to create a pre-configured Slack app:\n\n` +
+    `  ${manifestUrl}\n\n` +
+    `  Option B — Create app manually with manifest:\n` +
+    `  1. Go to https://api.slack.com/apps → "Create New App" → "From an app manifest"\n` +
+    `  2. Select your workspace, switch to JSON, and paste:\n\n` +
+    manifestJson.split("\n").map((l) => `     ${l}`).join("\n") + `\n\n` +
+    `  Then:\n` +
+    `  1. Select your workspace and click "Create"\n` +
+    `  2. Click "Install to Workspace" and approve the permissions\n` +
+    `  3. Go to "OAuth & Permissions" and copy the "Bot User OAuth Token" (starts with xoxb-)\n`
   );
 }

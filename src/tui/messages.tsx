@@ -17,6 +17,7 @@ function ToolCallLine({ tc }: { tc: DisplayToolCall }) {
         <Text color="green">{"■"}</Text>
       )}
       <Text dimColor>{" "}{tc.displayName}</Text>
+      {tc.summary ? <Text dimColor>{" "}{tc.summary}</Text> : null}
     </Box>
   );
 }
