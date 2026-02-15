@@ -6,6 +6,7 @@ import type {
   Message,
   ToolResult,
   ToolCall,
+  StreamCallbacks,
 } from "./provider.js";
 import type { Config } from "../config.js";
 import { resolveSecret } from "../config.js";
@@ -115,6 +116,64 @@ export class AnthropicProvider implements LLMProvider {
 
     return {
       stop_reason: response.stop_reason ?? "end_turn",
+      text,
+      tool_calls: toolCalls,
+    };
+  }
+
+  async chatStream(
+    systemPrompt: string,
+    messages: Message[],
+    tools: LLMTool[],
+    callbacks: StreamCallbacks
+  ): Promise<LLMResponse> {
+    await this.ensureFreshToken();
+
+    const anthropicTools: Anthropic.Tool[] = tools.map((t) => ({
+      name: t.name,
+      description: t.description ?? "",
+      input_schema: t.input_schema as Anthropic.Tool.InputSchema,
+    }));
+
+    const stream = this.client.messages.stream({
+      model: this.model,
+      max_tokens: 16384,
+      system: systemPrompt,
+      messages: messages as Anthropic.MessageParam[],
+      tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+    });
+
+    stream.on("text", (delta) => callbacks.onText(delta));
+
+    let finalMessage: Anthropic.Message;
+    try {
+      finalMessage = await stream.finalMessage();
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      callbacks.onError(err);
+      throw err;
+    }
+
+    callbacks.onComplete();
+
+    // Extract text and tool calls
+    let text = "";
+    const toolCalls: ToolCall[] = [];
+
+    for (const block of finalMessage.content) {
+      if (block.type === "text") {
+        text += block.text;
+      } else if (block.type === "tool_use") {
+        toolCalls.push({
+          id: block.id,
+          name: block.name,
+          input: block.input as Record<string, unknown>,
+        });
+      }
+    }
+
+    return {
+      stop_reason: finalMessage.stop_reason ?? "end_turn",
       text,
       tool_calls: toolCalls,
     };

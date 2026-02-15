@@ -29,13 +29,15 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { loadMCPConfig, saveMCPConfig, mcpConfigToServers, getMCPConfigPath, type MCPServerDef } from "./mcp/config.js";
 import { MCP_CATALOG, type CatalogEntry } from "./mcp/catalog.js";
 import { multiselect, cancelSymbol, type MultiselectItem } from "./prompts/multiselect.js";
+import { ChatSession } from "./chat/session.js";
+import { runChatLoop } from "./chat/loop.js";
 import { log, error } from "./utils/log.js";
 import { readLine } from "./utils/readline.js";
 
 const VERSION = "0.1.2";
 
 const args = process.argv.slice(2);
-const command = args[0] ?? "help";
+const command = args[0] ?? "chat";
 
 async function main() {
   if (args.includes("-v") || args.includes("--version")) {
@@ -44,6 +46,8 @@ async function main() {
   }
 
   switch (command) {
+    case "chat":
+      return cmdChat();
     case "init":
       return cmdInit();
     case "run":
@@ -343,6 +347,46 @@ async function cmdLogout() {
   reporter logout github      Remove stored GitHub token
   reporter logout anthropic   Remove stored Anthropic tokens`);
       process.exit(1);
+  }
+}
+
+async function cmdChat() {
+  if (!configExists()) {
+    error(`Config not found. Run "reporter init" first.`);
+    process.exit(1);
+  }
+
+  const config = loadConfig();
+
+  // MCP servers are optional for chat — gather what we can
+  const servers: ReturnType<typeof getEnabledServers> = [];
+  let customServerNames: string[] = [];
+
+  try {
+    servers.push(...getEnabledServers(config));
+  } catch (e) {
+    log(`Skipping some integrations: ${e instanceof Error ? e.message : e}`);
+  }
+
+  try {
+    const mcpConfig = loadMCPConfig();
+    const customServers = mcpConfigToServers(mcpConfig);
+    customServerNames = customServers.map((s) => s.name);
+    servers.push(...customServers);
+  } catch (_) {}
+
+  const mcpClient = new MCPClientManager(config.github?.orgs ?? []);
+
+  try {
+    if (servers.length > 0) {
+      await mcpClient.connect(servers);
+    }
+
+    const provider = new AnthropicProvider(config);
+    const session = new ChatSession(provider, mcpClient, config, customServerNames);
+    await runChatLoop(session);
+  } finally {
+    await mcpClient.disconnect();
   }
 }
 
@@ -795,11 +839,16 @@ function cmdSchedule() {
 }
 
 function cmdHelp() {
-  console.log(`reporter — AI-powered daily work report generator
+  console.log(`reporter — AI-powered work assistant
 
 Commands:
+  reporter                             Start interactive chat (default)
+  reporter chat                        Start interactive chat
   reporter init                        Create config at ~/reporter/config.toml
-  reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)
+  reporter run                         Generate report (stdout)
+  reporter run --dry                   List available tools, skip LLM
+  reporter run --no-save               Don't save report to disk
+  reporter login anthropic             Authenticate with Anthropic via OAuth
   reporter logout anthropic            Remove stored Anthropic tokens
   reporter login github                Authenticate with GitHub via browser OAuth
   reporter logout github               Remove stored GitHub token
@@ -807,9 +856,6 @@ Commands:
   reporter auth logout                 Remove stored Atlassian tokens
   reporter auth status                 Show Atlassian authentication status
   reporter auth slack                  Authenticate with Slack via bot token
-  reporter run                         Generate report (stdout)
-  reporter run --dry                   List available tools, skip LLM
-  reporter run --no-save               Don't save report to disk
   reporter mcp add <name> ...          Add a custom MCP server
   reporter mcp remove <name>           Remove a custom MCP server
   reporter mcp list                    List custom MCP servers
@@ -822,8 +868,6 @@ Commands:
   reporter memory forget <date>        Remove a note by date
   reporter history                     List past reports
   reporter schedule --every "9am"      Show crontab entry for scheduling
-  reporter schedule --every "*/15m"    Every N minutes
-  reporter schedule --every "*/6h"     Every N hours
 
 Options:
   -v, --version                    Show version

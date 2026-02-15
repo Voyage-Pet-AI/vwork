@@ -31,11 +31,26 @@ export interface Message {
   content: unknown; // provider-specific content shape
 }
 
+export interface StreamCallbacks {
+  onText: (delta: string) => void;
+  onToolStart: (toolCall: ToolCall) => void;
+  onToolEnd: (toolCall: ToolCall) => void;
+  onComplete: () => void;
+  onError: (error: Error) => void;
+}
+
 export interface LLMProvider {
   chat(
     systemPrompt: string,
     messages: Message[],
     tools: LLMTool[]
+  ): Promise<LLMResponse>;
+
+  chatStream(
+    systemPrompt: string,
+    messages: Message[],
+    tools: LLMTool[],
+    callbacks: StreamCallbacks
   ): Promise<LLMResponse>;
 
   // Build the appropriate message types for the provider

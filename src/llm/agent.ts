@@ -14,7 +14,7 @@ const GITHUB_TOOL_WHITELIST = new Set([
   "github__list_pull_requests_for_repo",
 ]);
 
-function filterTools(tools: MCPTool[]): MCPTool[] {
+export function filterTools(tools: MCPTool[]): MCPTool[] {
   return tools.filter((t) => {
     if (!t.name.startsWith("github__")) return true;
     return GITHUB_TOOL_WHITELIST.has(t.name);
