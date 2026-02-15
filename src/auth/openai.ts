@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, unlinkSync, existsSync, chmodSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
-import { getReporterDir } from "../config.js";
+import { getReporterDir, resolveSecret, type Config } from "../config.js";
 import { log, error } from "../utils/log.js";
 
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -98,6 +98,7 @@ async function loginBrowser(): Promise<StoredOpenAIOAuth> {
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("id_token_add_organizations", "true");
   authUrl.searchParams.set("originator", "reporter");
+  authUrl.searchParams.set("codex_cli_simplified_flow", "true");
 
   // Wait for callback via local server
   const codePromise = new Promise<string>((resolve, reject) => {
@@ -320,7 +321,10 @@ export function logoutOpenAI(): void {
   }
 }
 
-export function hasOpenAIAuth(): { mode: "oauth" | "none" } {
+export function hasOpenAIAuth(config?: Pick<Config, "llm">): { mode: "oauth" | "config" | "none" } {
+  if (config?.llm.api_key_env && resolveSecret(config.llm.api_key_env)) {
+    return { mode: "config" };
+  }
   if (loadStoredOpenAIAuth()) return { mode: "oauth" };
   return { mode: "none" };
 }

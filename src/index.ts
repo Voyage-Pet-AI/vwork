@@ -106,7 +106,7 @@ async function cmdInit() {
 
   // Check LLM auth and offer login if needed
   if (config.llm.provider === "openai") {
-    const openaiAuth = hasOpenAIAuth();
+    const openaiAuth = hasOpenAIAuth(config);
     if (openaiAuth.mode !== "none") {
       log(`OpenAI: authenticated (${openaiAuth.mode})`);
     } else if (!config.llm.api_key_env || !resolveSecret(config.llm.api_key_env)) {
@@ -119,7 +119,7 @@ async function cmdInit() {
       log("OpenAI: authenticated (config)");
     }
   } else {
-    const anthropicAuth = hasAnthropicAuth();
+    const anthropicAuth = hasAnthropicAuth(config);
     if (anthropicAuth.mode !== "none") {
       log(`Anthropic: authenticated (${anthropicAuth.mode})`);
     } else if (!config.llm.api_key_env || !resolveSecret(config.llm.api_key_env)) {

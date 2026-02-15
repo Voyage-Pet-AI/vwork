@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { render, Box } from "ink";
 import type { ChatSession } from "../chat/session.js";
 import type { StreamCallbacks, ToolCall } from "../llm/provider.js";
@@ -39,8 +39,16 @@ import {
   getNextRun,
   formatTimeUntil,
 } from "../schedule/crontab.js";
-import { hasAnthropicAuth, startAnthropicLogin } from "../auth/anthropic.js";
-import { hasOpenAIAuth, loginOpenAI } from "../auth/openai.js";
+import {
+  hasAnthropicAuth,
+  logoutAnthropic,
+  startAnthropicLogin,
+} from "../auth/anthropic.js";
+import {
+  hasOpenAIAuth,
+  loginOpenAI,
+  logoutOpenAI,
+} from "../auth/openai.js";
 import { createProvider } from "../index.js";
 import type { Config } from "../config.js";
 
@@ -66,6 +74,44 @@ function appendText(msg: DisplayMessage, delta: string) {
   }
 }
 
+type ProviderName = "anthropic" | "openai";
+
+interface ProviderAvailability {
+  providerModes: Record<ProviderName, string>;
+  usableProviders: ProviderName[];
+  visibleProviders: ProviderName[];
+}
+
+function getProviderAvailability(
+  config: Config,
+  currentProvider: string,
+): ProviderAvailability {
+  const anthropicMode = hasAnthropicAuth(config).mode;
+  const openaiMode = hasOpenAIAuth(config).mode;
+
+  const usableProviders: ProviderName[] = [];
+  if (anthropicMode !== "none") usableProviders.push("anthropic");
+  if (openaiMode !== "none") usableProviders.push("openai");
+
+  const visibleProviders = [...usableProviders];
+  const current = currentProvider as ProviderName;
+  if (!visibleProviders.includes(current)) {
+    visibleProviders.push(current);
+  }
+  if (visibleProviders.length === 0) {
+    visibleProviders.push("anthropic");
+  }
+
+  return {
+    providerModes: {
+      anthropic: anthropicMode,
+      openai: openaiMode,
+    },
+    usableProviders,
+    visibleProviders,
+  };
+}
+
 function App({ session, config, services, onExit }: AppProps) {
   const [completedMessages, setCompletedMessages] = useState<DisplayMessage[]>(
     [],
@@ -81,14 +127,7 @@ function App({ session, config, services, onExit }: AppProps) {
   const interceptorRef = useRef<((text: string) => void) | null>(null);
   const activityRef = useRef<ActivityInfo | null>(null);
   const [activityInfo, setActivityInfo] = useState<ActivityInfo | null>(null);
-
-  const authedProviders = useMemo(() => {
-    const providers: string[] = [];
-    if (hasAnthropicAuth().mode !== "none") providers.push("anthropic");
-    if (hasOpenAIAuth().mode !== "none") providers.push("openai");
-    if (providers.length === 0) providers.push(session.getProviderName());
-    return providers;
-  }, []);
+  const availability = getProviderAvailability(config, session.getProviderName());
 
   const finalizeActive = useCallback(() => {
     if (activeRef.current) {
@@ -328,7 +367,20 @@ function App({ session, config, services, onExit }: AppProps) {
       blocks: [
         {
           type: "text",
-          text: "Commands:\n  /help       Show this help\n  /connect    Switch LLM provider\n  /model      Switch LLM model\n  /schedule   Manage scheduled reports\n  /copy       Copy last response to clipboard\n  /clear      Clear conversation history\n  /exit       Exit chat",
+          text:
+            "Commands:\n" +
+            "  /help                     Show this help\n" +
+            "  /auth                     Show auth help\n" +
+            "  /auth status              Show OpenAI/Anthropic auth status\n" +
+            "  /auth <provider> login    Login provider\n" +
+            "  /auth <provider> relogin  Re-authenticate provider\n" +
+            "  /auth <provider> logout   Remove stored provider auth\n" +
+            "  /connect                  Switch LLM provider\n" +
+            "  /model                    Switch LLM model\n" +
+            "  /schedule                 Manage scheduled reports\n" +
+            "  /copy                     Copy last response to clipboard\n" +
+            "  /clear                    Clear conversation history\n" +
+            "  /exit                     Exit chat",
         },
       ],
     };
@@ -358,6 +410,138 @@ function App({ session, config, services, onExit }: AppProps) {
       };
     });
   }, []);
+
+  const runAnthropicLogin = useCallback(async (): Promise<boolean> => {
+    const handle = await startAnthropicLogin();
+    const opener =
+      process.platform === "darwin"
+        ? "open"
+        : process.platform === "win32"
+          ? "start"
+          : "xdg-open";
+    Bun.spawn([opener, handle.authUrl], {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    addSystemMessage(
+      `Opening browser for Anthropic authorization...\n\nIf the browser didn't open, visit:\n  ${handle.authUrl}\n\nPaste the authorization code below:`,
+    );
+    const code = await waitForInput();
+    if (!code) {
+      addSystemMessage("Login cancelled.");
+      return false;
+    }
+    await handle.complete(code);
+    addSystemMessage("Anthropic login successful!");
+    return true;
+  }, [addSystemMessage, waitForInput]);
+
+  const handleAuth = useCallback(
+    async (subcommand: string) => {
+      const tokens = subcommand.trim().split(/\s+/).filter(Boolean);
+      if (tokens.length === 0 || tokens[0] === "help") {
+        addSystemMessage(
+          "Auth commands:\n" +
+            "  /auth status\n" +
+            "  /auth openai status|login|relogin|logout\n" +
+            "  /auth anthropic status|login|relogin|logout",
+        );
+        return;
+      }
+
+      if (tokens[0] === "status") {
+        addSystemMessage(
+          `Auth status:\n` +
+            `  OpenAI: ${hasOpenAIAuth(config).mode}\n` +
+            `  Anthropic: ${hasAnthropicAuth(config).mode}`,
+        );
+        return;
+      }
+
+      const provider = tokens[0];
+      const action = tokens[1] ?? "status";
+
+      if (provider !== "openai" && provider !== "anthropic") {
+        addSystemMessage(
+          `Unknown provider "${provider}". Use "openai" or "anthropic".`,
+        );
+        return;
+      }
+
+      if (provider === "openai") {
+        if (action === "status") {
+          addSystemMessage(`OpenAI auth mode: ${hasOpenAIAuth(config).mode}`);
+          return;
+        }
+        if (action === "logout") {
+          logoutOpenAI();
+          addSystemMessage("OpenAI auth tokens removed.");
+          return;
+        }
+        if (action === "login") {
+          try {
+            addSystemMessage("Opening browser for OpenAI authorization...");
+            await loginOpenAI();
+            addSystemMessage("OpenAI login successful!");
+          } catch (err) {
+            addSystemMessage(
+              `OpenAI login failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+          return;
+        }
+        if (action === "relogin" || action === "reauth") {
+          try {
+            logoutOpenAI();
+            addSystemMessage("Previous OpenAI auth removed. Re-authenticating...");
+            await loginOpenAI();
+            addSystemMessage("OpenAI re-login successful!");
+          } catch (err) {
+            addSystemMessage(
+              `OpenAI re-login failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+          return;
+        }
+        addSystemMessage(`Unknown action "${action}" for openai.`);
+        return;
+      }
+
+      if (action === "status") {
+        addSystemMessage(`Anthropic auth mode: ${hasAnthropicAuth(config).mode}`);
+        return;
+      }
+      if (action === "logout") {
+        logoutAnthropic();
+        addSystemMessage("Anthropic auth tokens removed.");
+        return;
+      }
+      if (action === "login") {
+        try {
+          await runAnthropicLogin();
+        } catch (err) {
+          addSystemMessage(
+            `Anthropic login failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        return;
+      }
+      if (action === "relogin" || action === "reauth") {
+        try {
+          logoutAnthropic();
+          addSystemMessage("Previous Anthropic auth removed. Re-authenticating...");
+          await runAnthropicLogin();
+        } catch (err) {
+          addSystemMessage(
+            `Anthropic re-login failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        return;
+      }
+
+      addSystemMessage(`Unknown action "${action}" for anthropic.`);
+    },
+    [addSystemMessage, config, runAnthropicLogin],
+  );
 
   const handleSchedule = useCallback(
     async (subcommand: string) => {
@@ -510,6 +694,11 @@ function App({ session, config, services, onExit }: AppProps) {
 
   const handleModel = useCallback(
     (model: string, provider: string) => {
+      if (!availability.usableProviders.includes(provider as ProviderName)) {
+        addSystemMessage(`Provider **${provider}** is not currently usable for chat.`);
+        return;
+      }
+
       if (provider !== session.getProviderName()) {
         // Switch provider first, then override the default model
         const modifiedConfig: Config = {
@@ -541,13 +730,13 @@ function App({ session, config, services, onExit }: AppProps) {
         addSystemMessage(`Model switched to **${model}**.`);
       }
     },
-    [session, config, addSystemMessage],
+    [session, config, addSystemMessage, availability],
   );
 
   const switchProvider = useCallback(
     (providerName: string) => {
       const defaultModel =
-        providerName === "openai" ? "gpt-4.1" : "claude-sonnet-4-5-20250929";
+        providerName === "openai" ? "gpt-5.2-codex" : "claude-sonnet-4-5-20250929";
       const modifiedConfig: Config = {
         ...config,
         llm: {
@@ -586,31 +775,18 @@ function App({ session, config, services, onExit }: AppProps) {
         return;
       }
 
+      if (!availability.usableProviders.includes(providerName as ProviderName)) {
+        addSystemMessage(`Provider **${providerName}** is not currently usable for chat.`);
+        return;
+      }
+
       // Check auth — if missing, trigger inline login
       if (providerName === "anthropic") {
-        const auth = hasAnthropicAuth();
+        const auth = hasAnthropicAuth(config);
         if (auth.mode === "none") {
           try {
-            const handle = await startAnthropicLogin();
-            const opener =
-              process.platform === "darwin"
-                ? "open"
-                : process.platform === "win32"
-                  ? "start"
-                  : "xdg-open";
-            Bun.spawn([opener, handle.authUrl], {
-              stdio: ["ignore", "ignore", "ignore"],
-            });
-            addSystemMessage(
-              `Opening browser for Anthropic authorization...\n\nIf the browser didn't open, visit:\n  ${handle.authUrl}\n\nPaste the authorization code below:`,
-            );
-            const code = await waitForInput();
-            if (!code) {
-              addSystemMessage("Login cancelled.");
-              return;
-            }
-            await handle.complete(code);
-            addSystemMessage("Anthropic login successful!");
+            const ok = await runAnthropicLogin();
+            if (!ok) return;
           } catch (err) {
             addSystemMessage(
               `Anthropic login failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -619,7 +795,7 @@ function App({ session, config, services, onExit }: AppProps) {
           }
         }
       } else if (providerName === "openai") {
-        const auth = hasOpenAIAuth();
+        const auth = hasOpenAIAuth(config);
         if (auth.mode === "none") {
           try {
             addSystemMessage("Opening browser for OpenAI authorization...");
@@ -636,7 +812,7 @@ function App({ session, config, services, onExit }: AppProps) {
 
       switchProvider(providerName);
     },
-    [session, config, addSystemMessage, waitForInput, switchProvider],
+    [session, config, addSystemMessage, switchProvider, availability, runAnthropicLogin],
   );
 
   return (
@@ -658,10 +834,12 @@ function App({ session, config, services, onExit }: AppProps) {
         onClear={handleClear}
         onHelp={handleHelp}
         onCopy={handleCopy}
+        onAuth={handleAuth}
         onSchedule={handleSchedule}
         onModel={handleModel}
         onConnect={handleConnect}
-        authedProviders={authedProviders}
+        authedProviders={availability.visibleProviders}
+        availableProviders={availability.visibleProviders}
       />
     </Box>
   );

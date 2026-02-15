@@ -30,6 +30,7 @@ function useElapsed(startTime: number | null): string {
 
 const SLASH_COMMANDS = [
   { name: "help", description: "Show this help" },
+  { name: "auth", description: "Manage LLM authentication" },
   { name: "connect", description: "Switch LLM provider" },
   { name: "model", description: "Switch LLM model" },
   { name: "schedule", description: "Manage scheduled reports" },
@@ -52,9 +53,9 @@ const MODELS: Record<string, { id: string; label: string }[]> = {
     { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
   ],
   openai: [
+    { id: "gpt-5.2-codex", label: "GPT-5.2 Codex" },
     { id: "gpt-5.2", label: "GPT-5.2" },
-    { id: "gpt-4.1", label: "GPT-4.1" },
-    { id: "o4-mini", label: "o4-mini" },
+    { id: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini" },
   ],
 };
 
@@ -69,13 +70,15 @@ interface ChatInputProps {
   onClear: () => void;
   onHelp: () => void;
   onCopy: () => void;
+  onAuth: (subcommand: string) => void | Promise<void>;
   onSchedule: (subcommand: string) => void;
   onModel: (model: string, provider: string) => void;
   authedProviders: string[];
+  availableProviders: string[];
   onConnect: (provider: string) => void | Promise<void>;
 }
 
-export function ChatInput({ status, activityInfo, currentProvider, currentModel, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel, onConnect, authedProviders }: ChatInputProps) {
+export function ChatInput({ status, activityInfo, currentProvider, currentModel, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onAuth, onSchedule, onModel, onConnect, authedProviders, availableProviders }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [ctrlCPending, setCtrlCPending] = useState(false);
@@ -108,6 +111,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
   const atQuery = atMatch ? atMatch[1] : null;
   const { files: fileResults, loading: filesLoading } = useFileSearch(atQuery);
   const showFilePopover = atQuery !== null && (fileResults.length > 0 || filesLoading);
+  const connectItems = PROVIDERS.filter((p) => availableProviders.includes(p.name));
 
   const showPopover = showSlashPopover || showFilePopover || connectPopover || modelPopover;
 
@@ -115,6 +119,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
     setValue("");
     switch (cmd.name) {
       case "help": onHelp(); return;
+      case "auth": onAuth(""); return;
       case "connect": setConnectPopover(true); setSelectedIndex(0); return;
       case "model": setModelPopover(true); setSelectedIndex(0); return;
       case "schedule": onSchedule(""); return;
@@ -182,7 +187,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
       (MODELS[p] ?? []).map(m => ({ ...m, provider: p }))
     );
     const itemCount = connectPopover
-      ? PROVIDERS.length
+      ? connectItems.length
       : modelPopover
         ? modelItems.length
         : showSlashPopover
@@ -196,7 +201,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
       setSelectedIndex(i => (i < itemCount - 1 ? i + 1 : 0));
     } else if (key.tab || (key.rightArrow && (showSlashPopover || connectPopover || modelPopover))) {
       if (connectPopover) {
-        const provider = PROVIDERS[Math.min(selectedIndex, PROVIDERS.length - 1)];
+        const provider = connectItems[Math.min(selectedIndex, connectItems.length - 1)];
         if (provider) {
           setConnectPopover(false);
           onConnect(provider.name);
@@ -238,7 +243,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
 
     // If connect popover is showing, select the highlighted provider
     if (connectPopover) {
-      const provider = PROVIDERS[Math.min(selectedIndex, PROVIDERS.length - 1)];
+      const provider = connectItems[Math.min(selectedIndex, connectItems.length - 1)];
       if (provider) {
         setConnectPopover(false);
         setValue("");
@@ -306,6 +311,11 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
       case "/copy":
         onCopy();
         return;
+      case "/auth": {
+        const rest = trimmed.slice("/auth".length).trim();
+        onAuth(rest);
+        return;
+      }
       case "/connect":
         setConnectPopover(true);
         setSelectedIndex(0);
@@ -346,7 +356,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
       </Box>
       {connectPopover ? (
         <Box flexDirection="column" paddingLeft={2}>
-          {PROVIDERS.map((p, i) => (
+          {connectItems.map((p, i) => (
             <Text key={p.name}>
               {i === selectedIndex ? (
                 <Text color="cyan" bold>{"❯ "}</Text>

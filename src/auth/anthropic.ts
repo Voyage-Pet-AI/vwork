@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, unlinkSync, existsSync, chmodSync } from "fs";
 import { join } from "path";
-import { getReporterDir } from "../config.js";
+import { getReporterDir, resolveSecret, type Config } from "../config.js";
 import { readLine } from "../utils/readline.js";
 import { log, error } from "../utils/log.js";
 
@@ -248,8 +248,11 @@ export function logoutAnthropic(): void {
   }
 }
 
-export function hasAnthropicAuth(): { mode: "oauth" | "key" | "config" | "none" } {
+export function hasAnthropicAuth(config?: Pick<Config, "llm">): { mode: "oauth" | "key" | "config" | "none" } {
   if (loadStoredAnthropicOAuth()) return { mode: "oauth" };
   if (loadStoredAnthropicKey()) return { mode: "key" };
+  if (config?.llm.api_key_env && resolveSecret(config.llm.api_key_env)) {
+    return { mode: "config" };
+  }
   return { mode: "none" };
 }
