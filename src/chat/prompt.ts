@@ -62,7 +62,8 @@ ${sourcesLine}
 - **reporter__bash** — Run shell commands. Each call is a fresh shell. Use for system info, file operations, etc.
 - **reporter__glob** — Find files by pattern (e.g. "**/*.pdf"). Fast file discovery.
 - **reporter__grep** — Search file contents by pattern. Use for finding text across files.
-- **reporter__webfetch** — Fetch and read web pages. HTML is converted to readable markdown.`;
+- **reporter__webfetch** — Fetch and read web pages. HTML is converted to readable markdown.
+- **reporter__generate_report** — Run the dedicated reporting subagent (daily/weekly/custom). Returns report content plus saved file path/status.`;
 
   return prompt;
 }

@@ -28,3 +28,7 @@ channels = ["#engineering", "#standup"]
 lookback_days = 1
 output_dir = "~/.reporter/reports"
 memory_depth = 5
+
+[chat]
+report_postprocess_enabled = false
+report_inbox_replay_limit = 20

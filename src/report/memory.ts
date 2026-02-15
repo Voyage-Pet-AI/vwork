@@ -39,6 +39,11 @@ export interface RelevantReports {
   usedVectorSearch: boolean;
 }
 
+export interface SaveReportOptions {
+  kind?: "daily" | "weekly" | "custom";
+  timestamp?: Date;
+}
+
 function getMemoryClient(config: Config): { db: VectorDB; client: EmbeddingClient } | null {
   if (!config.memory?.enabled) return null;
 
@@ -108,10 +113,20 @@ export async function loadRelevantReports(config: Config): Promise<RelevantRepor
   }
 }
 
-export async function saveReport(config: Config, report: string): Promise<string> {
+export function buildReportFilename(options?: SaveReportOptions): string {
+  const kind = options?.kind ?? "custom";
+  const now = options?.timestamp ?? new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}-${hh}${min}-${kind}.md`;
+}
+
+export async function saveReport(config: Config, report: string, options?: SaveReportOptions): Promise<string> {
   const dir = resolveDir(config);
-  const date = new Date().toISOString().split("T")[0];
-  const path = join(dir, `${date}.md`);
+  const path = join(dir, buildReportFilename(options));
   writeFileSync(path, report);
 
   // Embed and store in vector DB if memory is enabled

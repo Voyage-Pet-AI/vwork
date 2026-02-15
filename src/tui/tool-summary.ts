@@ -29,6 +29,11 @@ export function toolCallSummary(tc: ToolCall): string {
       return inp.pattern ? truncate(String(inp.pattern)) : "";
     case "reporter__webfetch":
       return inp.url ? truncate(String(inp.url)) : "";
+    case "reporter__generate_report": {
+      const kind = typeof inp.kind === "string" ? inp.kind : "custom";
+      const lookback = typeof inp.lookback_days === "number" ? inp.lookback_days : "";
+      return `${kind}${lookback ? ` ${lookback}d` : ""}`;
+    }
   }
 
   // MCP tools — try common argument names
@@ -49,6 +54,7 @@ const FRIENDLY_NAMES: Record<string, string> = {
   reporter__glob: "Glob",
   reporter__grep: "Grep",
   reporter__webfetch: "WebFetch",
+  reporter__generate_report: "GenerateReport",
 };
 
 /** Map raw tool name to a short display name. */
@@ -100,6 +106,14 @@ export function toolResultSummary(toolName: string, result: string, isError?: bo
     case "reporter__webfetch": {
       const kb = (new TextEncoder().encode(result).length / 1024).toFixed(1);
       return `${kb}KB fetched`;
+    }
+    case "reporter__generate_report": {
+      try {
+        const parsed = JSON.parse(result) as { saved_path?: string | null; save_error?: string | null };
+        if (parsed.save_error) return `save failed: ${parsed.save_error}`;
+        if (parsed.saved_path) return `saved: ${parsed.saved_path}`;
+      } catch {}
+      return "report generated";
     }
     default: {
       // MCP / unknown: line count or first line

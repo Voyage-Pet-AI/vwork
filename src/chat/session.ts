@@ -3,8 +3,10 @@ import type { MCPClientManager } from "../mcp/client.js";
 import type { Config } from "../config.js";
 import { filterTools } from "../llm/agent.js";
 import { getBuiltinTools, executeBuiltinTool } from "./tools/index.js";
+import { executeReporterGenerateReportTool } from "./tools/reporter-generate-report.js";
 import { buildChatSystemPrompt } from "./prompt.js";
 import { error, debug } from "../utils/log.js";
+import type { ReportKind, ReportResult } from "../report/types.js";
 
 const MAX_TOOL_ROUNDS = 20;
 
@@ -14,6 +16,8 @@ export class ChatSession {
   private tools: LLMTool[];
   private provider: LLMProvider;
   private mcpClient: MCPClientManager;
+  private config: Config;
+  private customServerNames: string[];
 
   constructor(
     provider: LLMProvider,
@@ -23,6 +27,8 @@ export class ChatSession {
   ) {
     this.provider = provider;
     this.mcpClient = mcpClient;
+    this.config = config;
+    this.customServerNames = customServerNames;
 
     // Combine MCP tools (filtered) + built-in file tools
     const mcpTools = filterTools(mcpClient.getAllTools());
@@ -52,6 +58,77 @@ export class ChatSession {
 
   getProviderName(): string {
     return this.provider.providerName;
+  }
+
+  async runReportToolDirect(
+    input: {
+      kind: ReportKind;
+      lookback_days: number;
+      prompt: string;
+      save: boolean;
+      source: "chat" | "cli" | "schedule";
+      schedule_name?: string;
+    }
+  ): Promise<ReportResult> {
+    const raw = await executeReporterGenerateReportTool(input, {
+      provider: this.provider,
+      mcpClient: this.mcpClient,
+      config: this.config,
+      customServerNames: this.customServerNames,
+    });
+
+    const parsed = JSON.parse(raw) as {
+      content: string;
+      saved_path: string | null;
+      save_error: string | null;
+      run_id: string;
+      kind: ReportKind;
+      lookback_days: number;
+    };
+
+    this.messages.push({ role: "user", content: input.prompt });
+    this.messages.push({
+      role: "assistant",
+      content: [{ type: "text", text: parsed.content }],
+    });
+
+    return {
+      content: parsed.content,
+      savedPath: parsed.saved_path ?? undefined,
+      saveError: parsed.save_error ?? undefined,
+      runId: parsed.run_id,
+      kind: parsed.kind,
+      lookbackDays: parsed.lookback_days,
+    };
+  }
+
+  async postProcessReport(
+    report: ReportResult,
+    signal?: AbortSignal
+  ): Promise<string> {
+    const prompt = [
+      "Rephrase this for the user in 3-5 concise bullets.",
+      "Do not change facts.",
+      report.savedPath ? `Saved path: ${report.savedPath}` : "Saved path: not saved.",
+      "",
+      "Report content:",
+      report.content,
+    ].join("\n");
+
+    const response = await this.provider.chatStream(
+      this.systemPrompt,
+      [{ role: "user", content: prompt }],
+      [],
+      {
+        onText: () => {},
+        onToolStart: () => {},
+        onToolEnd: () => {},
+        onComplete: () => {},
+        onError: () => {},
+      },
+      signal
+    );
+    return response.text.trim();
   }
 
   /** Send a user message and stream the response. Handles tool call loops internally. */
@@ -115,7 +192,12 @@ export class ChatSession {
           try {
             let result: string;
             if (tc.name.startsWith("reporter__")) {
-              result = await executeBuiltinTool(tc, signal);
+              result = await executeBuiltinTool(tc, signal, {
+                provider: this.provider,
+                mcpClient: this.mcpClient,
+                config: this.config,
+                customServerNames: this.customServerNames,
+              });
             } else {
               const raw = await this.mcpClient.callTool(tc.name, tc.input);
               result = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);

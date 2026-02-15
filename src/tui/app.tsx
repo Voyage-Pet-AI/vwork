@@ -32,6 +32,7 @@ import {
   addSchedule,
   removeSchedule,
 } from "../schedule/store.js";
+import { consumeUnreadInboxEvents, getLatestRunForSchedule } from "../report/runs.js";
 import {
   installCrontabEntry,
   removeCrontabEntry,
@@ -47,6 +48,8 @@ import {
 import { hasOpenAIAuth, loginOpenAI, logoutOpenAI } from "../auth/openai.js";
 import { createProvider } from "../index.js";
 import type { Config } from "../config.js";
+import { detectReportIntent } from "../chat/report-intent.js";
+import type { ReportKind } from "../report/types.js";
 
 interface AppProps {
   session: ChatSession;
@@ -304,9 +307,97 @@ function App({ session, config, services, onExit }: AppProps) {
         files: filePaths.length > 0 ? filePaths : undefined,
       };
       setCompletedMessages((prev) => [...prev, userMsg]);
+
+      const pushSystem = (content: string) => {
+        const msg: DisplayMessage = {
+          id: nextId(),
+          role: "assistant",
+          blocks: [{ type: "text", text: content }],
+        };
+        setCompletedMessages((prev) => [...prev, msg]);
+      };
+
+      const requestInput = (): Promise<string> =>
+        new Promise((resolve) => {
+          interceptorRef.current = (value: string) => {
+            const userInput: DisplayMessage = {
+              id: nextId(),
+              role: "user",
+              blocks: [{ type: "text", text: value }],
+            };
+            setCompletedMessages((prev) => [...prev, userInput]);
+            interceptorRef.current = null;
+            resolve(value.trim());
+          };
+        });
+
+      const intent = detectReportIntent(text);
+      if (intent.matched) {
+        let kind: ReportKind;
+        let lookbackDays: number;
+        let label: string;
+
+        if (intent.ambiguous) {
+          pushSystem(
+            "Report range is ambiguous. Choose one:\n  `1` — Daily (1 day)\n  `2` — Weekly (7 days)\n  `3` — Custom (last N days)",
+          );
+          const choice = await requestInput();
+          if (choice === "1") {
+            kind = "daily";
+            lookbackDays = 1;
+            label = "daily";
+          } else if (choice === "2") {
+            kind = "weekly";
+            lookbackDays = 7;
+            label = "weekly";
+          } else if (choice === "3") {
+            pushSystem("Enter number of days to include:");
+            const raw = await requestInput();
+            const n = parseInt(raw, 10);
+            lookbackDays = isNaN(n) ? config.report.lookback_days : Math.max(1, n);
+            kind = "custom";
+            label = `last ${lookbackDays} days`;
+          } else {
+            pushSystem("Cancelled report generation.");
+            return;
+          }
+        } else {
+          kind = intent.kind!;
+          lookbackDays = intent.lookbackDays!;
+          label = intent.label ?? kind;
+        }
+
+        pushSystem(`Reporter executing report "${label}"...`);
+        try {
+          const report = await session.runReportToolDirect({
+            kind,
+            lookback_days: lookbackDays,
+            prompt: text,
+            save: true,
+            source: "chat",
+          });
+          pushSystem(report.content);
+          if (report.savedPath) {
+            pushSystem(`Saved to: ${report.savedPath}`);
+          }
+          if (report.saveError) {
+            pushSystem(`Warning: report generated but failed to save: ${report.saveError}`);
+          }
+          if (config.chat.report_postprocess_enabled) {
+            const wrapped = await session.postProcessReport(report);
+            if (wrapped) pushSystem(wrapped);
+          }
+        } catch (err) {
+          pushSystem(
+            `Report generation failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        return;
+      }
+
       processMessage(enhancedText);
     },
-    [status, processMessage],
+    [status, processMessage, config, session],
   );
 
   const abort = useCallback(() => {
@@ -572,7 +663,13 @@ function App({ session, config, services, onExit }: AppProps) {
         const lines = schedules.map((s, i) => {
           const next = getNextRun(s.cron);
           const eta = next ? formatTimeUntil(next) : "unknown";
-          return `  \`${i + 1}\` — **${s.name}** — ${s.frequencyLabel} (next in ${eta})`;
+          const latest = getLatestRunForSchedule(s.name);
+          const latestLine = latest
+            ? latest.status === "completed"
+              ? `last: completed${latest.savedPath ? ` · ${latest.savedPath}` : ""}`
+              : `last: failed · ${latest.error ?? "unknown error"}`
+            : "last: never";
+          return `  \`${i + 1}\` — **${s.name}** — ${s.frequencyLabel} (next in ${eta}, ${latestLine})`;
         });
         addSystemMessage(
           "Scheduled reports:\n" +
@@ -837,6 +934,14 @@ function App({ session, config, services, onExit }: AppProps) {
       runAnthropicLogin,
     ],
   );
+
+  useEffect(() => {
+    const events = consumeUnreadInboxEvents(config.chat.report_inbox_replay_limit);
+    if (events.length === 0) return;
+    for (const event of events) {
+      addSystemMessage(`[inbox] ${event.message}`);
+    }
+  }, [addSystemMessage, config.chat.report_inbox_replay_limit]);
 
   return (
     <Box flexDirection="column">

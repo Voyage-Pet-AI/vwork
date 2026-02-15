@@ -33,6 +33,11 @@ export interface ReportConfig {
   memory_depth: number;
 }
 
+export interface ChatConfig {
+  report_postprocess_enabled: boolean;
+  report_inbox_replay_limit: number;
+}
+
 export interface MemoryConfig {
   enabled: boolean;
   embedding_model: string;
@@ -46,6 +51,7 @@ export interface Config {
   jira: JiraConfig;
   slack: SlackConfig;
   report: ReportConfig;
+  chat: ChatConfig;
   memory?: MemoryConfig;
 }
 
@@ -85,6 +91,18 @@ export function loadConfig(): Config {
   // Resolve ~ in memory.db_path
   if (parsed.memory?.db_path?.startsWith("~")) {
     parsed.memory.db_path = parsed.memory.db_path.replace("~", homedir());
+  }
+
+  if (!parsed.chat) {
+    parsed.chat = {
+      report_postprocess_enabled: false,
+      report_inbox_replay_limit: 20,
+    };
+  } else {
+    parsed.chat.report_postprocess_enabled = Boolean(parsed.chat.report_postprocess_enabled);
+    parsed.chat.report_inbox_replay_limit = Number.isFinite(parsed.chat.report_inbox_replay_limit)
+      ? Math.max(1, Math.floor(parsed.chat.report_inbox_replay_limit))
+      : 20;
   }
 
   return parsed;
@@ -131,6 +149,12 @@ lookback_days = 1
 output_dir = "~/reporter/reports"
 # Number of past reports to include as context for continuity
 memory_depth = 5
+
+[chat]
+# Optional second-pass summary after report subagent output
+report_postprocess_enabled = false
+# Number of unread scheduled-run lifecycle messages to replay when chat starts
+report_inbox_replay_limit = 20
 
 # [memory]
 # Semantic memory — uses vector search to find relevant past reports and notes

@@ -4,9 +4,9 @@ import { getEnabledServers } from "./mcp/registry.js";
 import { MCPClientManager } from "./mcp/client.js";
 import { AnthropicProvider } from "./llm/anthropic.js";
 import { OpenAIProvider } from "./llm/openai.js";
-import { runAgent } from "./llm/agent.js";
-import { buildSystemPrompt, buildUserMessage, buildScheduleUserMessage } from "./report/prompt.js";
-import { loadRelevantReports, saveReport, listReports } from "./report/memory.js";
+import { buildUserMessage, buildScheduleUserMessage } from "./report/prompt.js";
+import { listReports } from "./report/memory.js";
+import { runReportSubagent } from "./report/runner.js";
 import { getSchedule } from "./schedule/store.js";
 import { sendNotification } from "./schedule/notify.js";
 import { VectorDB } from "./memory/vectordb.js";
@@ -496,22 +496,29 @@ async function cmdRun() {
       return;
     }
 
-    // Build prompt with memory
-    const { content: pastReports, usedVectorSearch } = await loadRelevantReports(config);
-    const systemPrompt = buildSystemPrompt(config, pastReports, customServerNames, usedVectorSearch);
-    const userMessage = buildUserMessage(config);
-
-    // Run the agentic loop
     const provider = createProvider(config);
-    const report = await runAgent(provider, mcpClient, systemPrompt, userMessage);
+    const result = await runReportSubagent(
+      {
+        kind: config.report.lookback_days >= 7 ? "weekly" : "daily",
+        lookbackDays: config.report.lookback_days,
+        prompt: buildUserMessage(config),
+        source: "cli",
+        save: !noSave,
+      },
+      {
+        provider,
+        mcpClient,
+        config,
+        customServerNames,
+      }
+    );
 
-    // Output to stdout
-    console.log(report);
-
-    // Save report
-    if (!noSave) {
-      const path = await saveReport(config, report);
-      log(`Report saved to ${path}`);
+    console.log(result.content);
+    if (result.savedPath) {
+      log(`Report saved to ${result.savedPath}`);
+    }
+    if (result.saveError) {
+      error(`Report generated but failed to save: ${result.saveError}`);
     }
   } finally {
     await mcpClient.disconnect();
@@ -915,25 +922,32 @@ async function cmdScheduleRun() {
   try {
     await mcpClient.connect(servers);
 
-    const { content: pastReports, usedVectorSearch } = await loadRelevantReports(config);
-    const systemPrompt = buildSystemPrompt(config, pastReports, customServerNames, usedVectorSearch);
-    const userMessage = buildScheduleUserMessage(config, schedule.prompt || undefined);
-
     const provider = createProvider(config);
-    const report = await runAgent(provider, mcpClient, systemPrompt, userMessage);
+    const result = await runReportSubagent(
+      {
+        kind: config.report.lookback_days >= 7 ? "weekly" : "daily",
+        lookbackDays: config.report.lookback_days,
+        prompt: buildScheduleUserMessage(config, schedule.prompt || undefined),
+        source: "schedule",
+        save: true,
+        scheduleName: name,
+      },
+      {
+        provider,
+        mcpClient,
+        config,
+        customServerNames,
+      }
+    );
 
-    // Save with schedule-specific filename
-    const { writeFileSync, mkdirSync } = await import("fs");
-    const { join } = await import("path");
-    const { homedir } = await import("os");
-    const dir = config.report.output_dir.replace("~", homedir());
-    mkdirSync(dir, { recursive: true });
-    const date = new Date().toISOString().split("T")[0];
-    const path = join(dir, `${date}-${name}.md`);
-    writeFileSync(path, report);
-
-    log(`Report saved to ${path}`);
-    await sendNotification("Reporter", name, "Report generated successfully.");
+    if (result.savedPath) {
+      log(`Report saved to ${result.savedPath}`);
+      await sendNotification("Reporter", name, `Report generated: ${result.savedPath}`);
+    } else if (result.saveError) {
+      await sendNotification("Reporter", `${name} warning`, `Generated report but failed to save: ${result.saveError}`);
+    } else {
+      await sendNotification("Reporter", name, "Report generated successfully.");
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     error(msg);
