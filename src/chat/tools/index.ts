@@ -7,6 +7,7 @@ import { bashTools, executeBashTool } from "./bash.js";
 import { globTools, executeGlobTool } from "./glob.js";
 import { grepTools, executeGrepTool } from "./grep.js";
 import { webfetchTools, executeWebfetchTool } from "./webfetch.js";
+import { computerTools, executeComputerTool } from "./computer.js";
 import {
   reporterGenerateReportTools,
   executeReporterGenerateReportTool,
@@ -15,12 +16,20 @@ import {
   reportScheduleTools,
   executeReportScheduleTool,
 } from "./report-schedule.js";
+import type { ComputerSessionEvent } from "../../computer/types.js";
 
 export interface BuiltinToolContext {
   provider?: LLMProvider;
   mcpClient?: MCPClientManager;
   config?: Config;
   customServerNames?: string[];
+  requestComputerApproval?: (input: {
+    task: string;
+    startUrl?: string;
+    maxSteps: number;
+  }) => Promise<boolean>;
+  registerComputerAbortController?: (controller: AbortController | null) => void;
+  onComputerSessionEvent?: (event: ComputerSessionEvent) => void;
 }
 
 export function getBuiltinTools(): LLMTool[] {
@@ -30,6 +39,7 @@ export function getBuiltinTools(): LLMTool[] {
     ...globTools,
     ...grepTools,
     ...webfetchTools,
+    ...computerTools,
     ...reporterGenerateReportTools,
     ...reportScheduleTools,
   ];
@@ -57,6 +67,15 @@ export async function executeBuiltinTool(
 
     case "reporter__webfetch":
       return executeWebfetchTool(tc, signal);
+
+    case "reporter__computer":
+      return executeComputerTool(tc, signal, {
+        provider: context?.provider,
+        config: context?.config,
+        requestComputerApproval: context?.requestComputerApproval,
+        registerComputerAbortController: context?.registerComputerAbortController,
+        onComputerSessionEvent: context?.onComputerSessionEvent,
+      });
 
     case "reporter__generate_report":
       if (!context?.provider || !context?.mcpClient || !context?.config) {

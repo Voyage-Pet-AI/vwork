@@ -29,6 +29,8 @@ export function toolCallSummary(tc: ToolCall): string {
       return inp.pattern ? truncate(String(inp.pattern)) : "";
     case "reporter__webfetch":
       return inp.url ? truncate(String(inp.url)) : "";
+    case "reporter__computer":
+      return inp.task ? truncate(String(inp.task)) : "";
     case "reporter__generate_report": {
       const kind = typeof inp.kind === "string" ? inp.kind : "custom";
       const lookback = typeof inp.lookback_days === "number" ? inp.lookback_days : "";
@@ -60,6 +62,7 @@ const FRIENDLY_NAMES: Record<string, string> = {
   reporter__glob: "Glob",
   reporter__grep: "Grep",
   reporter__webfetch: "WebFetch",
+  reporter__computer: "Computer",
   reporter__generate_report: "GenerateReport",
   reporter__report_list_schedules: "ListSchedules",
   reporter__report_add_schedule: "AddSchedule",
@@ -116,6 +119,23 @@ export function toolResultSummary(toolName: string, result: string, isError?: bo
     case "reporter__webfetch": {
       const kb = (new TextEncoder().encode(result).length / 1024).toFixed(1);
       return `${kb}KB fetched`;
+    }
+    case "reporter__computer": {
+      try {
+        const parsed = JSON.parse(result) as {
+          ok?: boolean;
+          summary?: string;
+          actions?: unknown[];
+          error_message?: string;
+        };
+        if (parsed.ok) {
+          const count = Array.isArray(parsed.actions) ? parsed.actions.length : 0;
+          return `${count} actions · ${truncate(parsed.summary ?? "completed", 52)}`;
+        }
+        return truncate(parsed.error_message ?? parsed.summary ?? "computer run failed", 60);
+      } catch {
+        return firstLine(result);
+      }
     }
     case "reporter__generate_report": {
       try {

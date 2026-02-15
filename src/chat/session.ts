@@ -7,6 +7,7 @@ import { executeReporterGenerateReportTool } from "./tools/reporter-generate-rep
 import { buildChatSystemPrompt } from "./prompt.js";
 import { error, debug } from "../utils/log.js";
 import type { ReportKind, ReportResult } from "../report/types.js";
+import type { ComputerSessionEvent } from "../computer/types.js";
 
 const MAX_TOOL_ROUNDS = 20;
 
@@ -18,6 +19,13 @@ export class ChatSession {
   private mcpClient: MCPClientManager;
   private config: Config;
   private customServerNames: string[];
+  private computerApprovalHandler?: (input: {
+    task: string;
+    startUrl?: string;
+    maxSteps: number;
+  }) => Promise<boolean>;
+  private computerEventHandler?: (event: ComputerSessionEvent) => void;
+  private activeComputerAbortController: AbortController | null = null;
 
   constructor(
     provider: LLMProvider,
@@ -58,6 +66,20 @@ export class ChatSession {
 
   getProviderName(): string {
     return this.provider.providerName;
+  }
+
+  setComputerApprovalHandler(
+    handler?: (input: { task: string; startUrl?: string; maxSteps: number }) => Promise<boolean>
+  ): void {
+    this.computerApprovalHandler = handler;
+  }
+
+  setComputerEventHandler(handler?: (event: ComputerSessionEvent) => void): void {
+    this.computerEventHandler = handler;
+  }
+
+  abortComputerSession(): void {
+    this.activeComputerAbortController?.abort();
   }
 
   async runReportToolDirect(
@@ -197,6 +219,11 @@ export class ChatSession {
                 mcpClient: this.mcpClient,
                 config: this.config,
                 customServerNames: this.customServerNames,
+                requestComputerApproval: this.computerApprovalHandler,
+                registerComputerAbortController: (controller) => {
+                  this.activeComputerAbortController = controller;
+                },
+                onComputerSessionEvent: this.computerEventHandler,
               });
             } else {
               const raw = await this.mcpClient.callTool(tc.name, tc.input);

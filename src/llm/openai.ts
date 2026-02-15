@@ -7,6 +7,9 @@ import type {
   ToolResult,
   ToolCall,
   StreamCallbacks,
+  ComputerUseCapabilities,
+  ComputerUseTask,
+  ComputerUseTaskResult,
 } from "./provider.js";
 import type { Config } from "../config.js";
 import { resolveSecret } from "../config.js";
@@ -551,5 +554,22 @@ export class OpenAIProvider implements LLMProvider {
         is_error: r.is_error ?? false,
       })),
     };
+  }
+
+  getComputerUseCapabilities(): ComputerUseCapabilities {
+    return {
+      supported: false,
+      reason:
+        `OpenAI computer-use execution is not yet enabled in Reporter for model "${this.model}".`,
+    };
+  }
+
+  async runComputerUseTask(
+    _task: ComputerUseTask,
+    _signal?: AbortSignal
+  ): Promise<ComputerUseTaskResult> {
+    throw new Error(
+      `Computer use is unavailable for provider "${this.providerName}" on model "${this.model}".`
+    );
   }
 }

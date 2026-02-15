@@ -32,3 +32,11 @@ memory_depth = 5
 [chat]
 report_postprocess_enabled = false
 report_inbox_replay_limit = 20
+
+[computer]
+enabled = true
+require_session_approval = true
+max_steps = 150
+max_duration_sec = 900
+allow_domains = []
+block_domains = []

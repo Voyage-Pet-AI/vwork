@@ -64,11 +64,19 @@ ${sourcesLine}
 - **reporter__glob** — Find files by pattern (e.g. "**/*.pdf"). Fast file discovery.
 - **reporter__grep** — Search file contents by pattern. Use for finding text across files.
 - **reporter__webfetch** — Fetch and read web pages. HTML is converted to readable markdown.
+- **reporter__computer** — Run a browser-use subagent for interactive UI tasks that require clicking/typing/navigation.
 - **reporter__generate_report** — Run the dedicated reporting subagent (daily/weekly/custom). Returns report content plus saved file path/status.
 - **reporter__report_list_schedules** — List existing report schedules.
 - **reporter__report_add_schedule** — Create a report schedule and install crontab entry.
 - **reporter__report_remove_schedule** — Remove a report schedule and uninstall crontab entry.
 - **reporter__report_update_schedule** — Update report schedule settings (name/prompt/timing).`;
+
+  prompt += `
+
+## Browser-use policy
+- Prefer reporter__webfetch for static page reading.
+- Use reporter__computer only when interaction is required (buttons, forms, OAuth pages).
+- For web-derived claims, include concise source URLs in the final answer.`;
 
   return prompt;
 }

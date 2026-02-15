@@ -38,6 +38,15 @@ export interface ChatConfig {
   report_inbox_replay_limit: number;
 }
 
+export interface ComputerConfig {
+  enabled: boolean;
+  require_session_approval: boolean;
+  max_steps: number;
+  max_duration_sec: number;
+  allow_domains: string[];
+  block_domains: string[];
+}
+
 export interface MemoryConfig {
   enabled: boolean;
   embedding_model: string;
@@ -52,6 +61,7 @@ export interface Config {
   slack: SlackConfig;
   report: ReportConfig;
   chat: ChatConfig;
+  computer: ComputerConfig;
   memory?: MemoryConfig;
 }
 
@@ -105,6 +115,33 @@ export function loadConfig(): Config {
       : 20;
   }
 
+  if (!parsed.computer) {
+    parsed.computer = {
+      enabled: true,
+      require_session_approval: true,
+      max_steps: 150,
+      max_duration_sec: 900,
+      allow_domains: [],
+      block_domains: [],
+    };
+  } else {
+    parsed.computer.enabled = parsed.computer.enabled !== false;
+    parsed.computer.require_session_approval =
+      parsed.computer.require_session_approval !== false;
+    parsed.computer.max_steps = Number.isFinite(parsed.computer.max_steps)
+      ? Math.max(1, Math.floor(parsed.computer.max_steps))
+      : 150;
+    parsed.computer.max_duration_sec = Number.isFinite(parsed.computer.max_duration_sec)
+      ? Math.max(10, Math.floor(parsed.computer.max_duration_sec))
+      : 900;
+    parsed.computer.allow_domains = Array.isArray(parsed.computer.allow_domains)
+      ? parsed.computer.allow_domains.map(String)
+      : [];
+    parsed.computer.block_domains = Array.isArray(parsed.computer.block_domains)
+      ? parsed.computer.block_domains.map(String)
+      : [];
+  }
+
   return parsed;
 }
 
@@ -155,6 +192,19 @@ memory_depth = 5
 report_postprocess_enabled = false
 # Number of unread scheduled-run lifecycle messages to replay when chat starts
 report_inbox_replay_limit = 20
+
+[computer]
+# Enable the browser-use computer subagent
+enabled = true
+# Require one explicit approval in chat before a computer session starts
+require_session_approval = true
+# Hard cap for number of browser actions per task
+max_steps = 150
+# Hard cap for wall-clock session duration in seconds
+max_duration_sec = 900
+# Optional allow/block domain controls (supports exact domains and *.wildcards)
+allow_domains = []
+block_domains = []
 
 # [memory]
 # Semantic memory — uses vector search to find relevant past reports and notes

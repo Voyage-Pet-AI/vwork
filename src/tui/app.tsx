@@ -401,8 +401,9 @@ function App({ session, config, services, onExit }: AppProps) {
   );
 
   const abort = useCallback(() => {
+    session.abortComputerSession();
     abortRef.current?.abort();
-  }, []);
+  }, [session]);
 
   // Dequeue: when idle and there are queued messages, process the next one
   useEffect(() => {
@@ -508,6 +509,38 @@ function App({ session, config, services, onExit }: AppProps) {
       };
     });
   }, []);
+
+  useEffect(() => {
+    session.setComputerApprovalHandler(async (input) => {
+      addSystemMessage(
+        "Computer subagent requests approval:\n" +
+          `- Task: ${input.task}\n` +
+          `- Start URL: ${input.startUrl ?? "(none)"}\n` +
+          `- Max steps: ${input.maxSteps}\n\n` +
+          'Reply with "yes" to approve, anything else to deny.',
+      );
+      const reply = (await waitForInput()).toLowerCase();
+      const approved = reply === "y" || reply === "yes";
+      addSystemMessage(approved ? "Computer session approved." : "Computer session denied.");
+      return approved;
+    });
+
+    session.setComputerEventHandler((event) => {
+      if (!activityRef.current) return;
+      if (event.type === "computer_action") {
+        const step = event.step ?? 0;
+        const max = event.maxSteps ?? 0;
+        const url = event.url ? ` @ ${event.url}` : "";
+        activityRef.current.lastToolName = `Computer ${step}/${max}${url}`;
+        setActivityInfo({ ...activityRef.current });
+      }
+    });
+
+    return () => {
+      session.setComputerApprovalHandler(undefined);
+      session.setComputerEventHandler(undefined);
+    };
+  }, [addSystemMessage, session, waitForInput]);
 
   const runAnthropicLogin = useCallback(async (): Promise<boolean> => {
     const handle = await startAnthropicLogin();

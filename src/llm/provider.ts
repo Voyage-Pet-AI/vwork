@@ -7,6 +7,41 @@ export interface LLMTool {
   input_schema: Record<string, unknown>;
 }
 
+export interface ComputerUseTask {
+  task: string;
+  startUrl?: string;
+  maxSteps: number;
+  maxDurationSec: number;
+}
+
+export interface ComputerUseAction {
+  type: string;
+  timestamp: string;
+  url?: string;
+  detail?: string;
+}
+
+export interface ComputerUseArtifact {
+  type: "screenshot" | "trace" | "log";
+  path?: string;
+  label?: string;
+}
+
+export interface ComputerUseTaskResult {
+  ok: boolean;
+  summary: string;
+  actions: ComputerUseAction[];
+  artifacts: ComputerUseArtifact[];
+  visitedUrls: string[];
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+export interface ComputerUseCapabilities {
+  supported: boolean;
+  reason?: string;
+}
+
 export interface ToolCall {
   id: string;
   name: string;
@@ -61,4 +96,11 @@ export interface LLMProvider {
   // Build the appropriate message types for the provider
   makeAssistantMessage(response: LLMResponse): Message;
   makeToolResultMessage(results: ToolResult[]): Message;
+
+  // Computer-use extension
+  getComputerUseCapabilities(): ComputerUseCapabilities;
+  runComputerUseTask(
+    task: ComputerUseTask,
+    signal?: AbortSignal
+  ): Promise<ComputerUseTaskResult>;
 }

@@ -167,10 +167,19 @@ channels = ["#engineering"]
 lookback_days = 1      # How many days back to fetch activity
 output_dir = "~/.reporter/reports"
 memory_depth = 5       # Number of past reports to include as context
+
+[computer]
+enabled = true
+require_session_approval = true
+max_steps = 150
+max_duration_sec = 900
+allow_domains = []
+block_domains = []
 ```
 
 - `lookback_days` — How far back to look when gathering events. Set to `1` for daily, `7` for weekly.
 - `memory_depth` — How many previous reports to feed as context. Powers the **Decision Trail** section.
+- `computer` — Controls the browser-use subagent used for interactive UI tasks. Session approval is enabled by default.
 
 ## Report output
 
