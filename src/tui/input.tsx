@@ -45,10 +45,24 @@ const PROVIDERS = [
   { name: "openai", label: "OpenAI" },
 ];
 
+const MODELS: Record<string, { id: string; label: string }[]> = {
+  anthropic: [
+    { id: "claude-opus-4-6", label: "Claude Opus 4.6" },
+    { id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" },
+    { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+  ],
+  openai: [
+    { id: "gpt-5.2", label: "GPT-5.2" },
+    { id: "gpt-4.1", label: "GPT-4.1" },
+    { id: "o4-mini", label: "o4-mini" },
+  ],
+};
+
 interface ChatInputProps {
   status: AppStatus;
   activityInfo?: ActivityInfo | null;
   currentProvider: string;
+  currentModel: string;
   onSubmit: (text: string) => void;
   onAbort: () => void;
   onExit: () => void;
@@ -56,15 +70,16 @@ interface ChatInputProps {
   onHelp: () => void;
   onCopy: () => void;
   onSchedule: (subcommand: string) => void;
-  onModel: () => void;
+  onModel: (model: string) => void;
   onConnect: (provider: string) => void | Promise<void>;
 }
 
-export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel, onConnect }: ChatInputProps) {
+export function ChatInput({ status, activityInfo, currentProvider, currentModel, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel, onConnect }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [ctrlCPending, setCtrlCPending] = useState(false);
   const [connectPopover, setConnectPopover] = useState(false);
+  const [modelPopover, setModelPopover] = useState(false);
   const ctrlCTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isBusy = status !== "idle";
   const elapsed = useElapsed(activityInfo?.startTime ?? null);
@@ -93,14 +108,14 @@ export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onA
   const { files: fileResults, loading: filesLoading } = useFileSearch(atQuery);
   const showFilePopover = atQuery !== null && (fileResults.length > 0 || filesLoading);
 
-  const showPopover = showSlashPopover || showFilePopover || connectPopover;
+  const showPopover = showSlashPopover || showFilePopover || connectPopover || modelPopover;
 
   const executeCommand = (cmd: SlashCommand) => {
     setValue("");
     switch (cmd.name) {
       case "help": onHelp(); return;
       case "connect": setConnectPopover(true); setSelectedIndex(0); return;
-      case "model": onModel(); return;
+      case "model": setModelPopover(true); setSelectedIndex(0); return;
       case "schedule": onSchedule(""); return;
       case "copy": onCopy(); return;
       case "clear": onClear(); return;
@@ -149,6 +164,10 @@ export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onA
         setConnectPopover(false);
         return;
       }
+      if (modelPopover) {
+        setModelPopover(false);
+        return;
+      }
       if (isBusy) {
         onAbort();
         return;
@@ -158,23 +177,32 @@ export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onA
 
     if (!showPopover) return;
 
+    const modelItems = MODELS[currentProvider] ?? [];
     const itemCount = connectPopover
       ? PROVIDERS.length
-      : showSlashPopover
-        ? filteredCommands.length
-        : fileResults.length;
+      : modelPopover
+        ? modelItems.length
+        : showSlashPopover
+          ? filteredCommands.length
+          : fileResults.length;
     if (itemCount === 0) return;
 
     if (key.upArrow) {
       setSelectedIndex(i => (i > 0 ? i - 1 : itemCount - 1));
     } else if (key.downArrow) {
       setSelectedIndex(i => (i < itemCount - 1 ? i + 1 : 0));
-    } else if (key.tab || (key.rightArrow && (showSlashPopover || connectPopover))) {
+    } else if (key.tab || (key.rightArrow && (showSlashPopover || connectPopover || modelPopover))) {
       if (connectPopover) {
         const provider = PROVIDERS[Math.min(selectedIndex, PROVIDERS.length - 1)];
         if (provider) {
           setConnectPopover(false);
           onConnect(provider.name);
+        }
+      } else if (modelPopover) {
+        const model = modelItems[Math.min(selectedIndex, modelItems.length - 1)];
+        if (model) {
+          setModelPopover(false);
+          onModel(model.id);
         }
       } else if (showSlashPopover) {
         const cmd = filteredCommands[Math.min(selectedIndex, filteredCommands.length - 1)];
@@ -199,6 +227,7 @@ export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onA
     setValue(newValue);
     setSelectedIndex(0);
     if (connectPopover) setConnectPopover(false);
+    if (modelPopover) setModelPopover(false);
   };
 
   const handleSubmit = (text: string) => {
@@ -211,6 +240,18 @@ export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onA
         setConnectPopover(false);
         setValue("");
         onConnect(provider.name);
+      }
+      return;
+    }
+
+    // If model popover is showing, select the highlighted model
+    if (modelPopover) {
+      const modelItems = MODELS[currentProvider] ?? [];
+      const model = modelItems[Math.min(selectedIndex, modelItems.length - 1)];
+      if (model) {
+        setModelPopover(false);
+        setValue("");
+        onModel(model.id);
       }
       return;
     }
@@ -265,7 +306,8 @@ export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onA
         setSelectedIndex(0);
         return;
       case "/model":
-        onModel();
+        setModelPopover(true);
+        setSelectedIndex(0);
         return;
       case "/schedule": {
         const rest = trimmed.slice("/schedule".length).trim();
@@ -310,6 +352,22 @@ export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onA
                 {p.label}
               </Text>
               {p.name === currentProvider && <Text dimColor>{"  (current)"}</Text>}
+            </Text>
+          ))}
+        </Box>
+      ) : modelPopover ? (
+        <Box flexDirection="column" paddingLeft={2}>
+          {(MODELS[currentProvider] ?? []).map((m, i) => (
+            <Text key={m.id}>
+              {i === selectedIndex ? (
+                <Text color="cyan" bold>{"❯ "}</Text>
+              ) : (
+                <Text>{"  "}</Text>
+              )}
+              <Text color={i === selectedIndex ? "cyan" : undefined} bold={i === selectedIndex}>
+                {m.label}
+              </Text>
+              {m.id === currentModel && <Text dimColor>{"  (current)"}</Text>}
             </Text>
           ))}
         </Box>

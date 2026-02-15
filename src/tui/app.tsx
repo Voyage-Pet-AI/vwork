@@ -500,42 +500,15 @@ function App({ session, config, services, onExit }: AppProps) {
     [addSystemMessage, waitForInput, processMessage],
   );
 
-  const handleModel = useCallback(async () => {
-    const currentModel = session.getModel();
-    const providerName = session.getProviderName();
-
-    const suggestions: string[] =
-      providerName === "openai"
-        ? ["gpt-4o", "gpt-4o-mini", "o3-mini"]
-        : [
-            "claude-sonnet-4-5-20250929",
-            "claude-opus-4-5-20250514",
-            "claude-haiku-3-5-20241022",
-          ];
-
-    const lines = suggestions.map((s, i) => `  \`${i + 1}\` — ${s}`);
-    addSystemMessage(
-      `Current model: **${currentModel}** (${providerName})\n\nPick a model or type a custom name:\n${lines.join("\n")}`,
-    );
-
-    const input = await waitForInput();
-    const num = parseInt(input, 10);
-    const chosen =
-      num >= 1 && num <= suggestions.length ? suggestions[num - 1] : input;
-
-    if (!chosen) {
-      addSystemMessage("No model selected.");
-      return;
-    }
-
-    session.setModel(chosen);
-    addSystemMessage(`Model switched to **${chosen}**.`);
-  }, [session, addSystemMessage, waitForInput]);
+  const handleModel = useCallback((model: string) => {
+    session.setModel(model);
+    addSystemMessage(`Model switched to **${model}**.`);
+  }, [session, addSystemMessage]);
 
   const switchProvider = useCallback(
     (providerName: string) => {
       const defaultModel =
-        providerName === "openai" ? "gpt-4o" : "claude-sonnet-4-5-20250929";
+        providerName === "openai" ? "gpt-4.1" : "claude-sonnet-4-5-20250929";
       const modifiedConfig: Config = {
         ...config,
         llm: { ...config.llm, provider: providerName, model: defaultModel },
@@ -624,6 +597,7 @@ function App({ session, config, services, onExit }: AppProps) {
         status={status}
         activityInfo={activityInfo}
         currentProvider={session.getProviderName()}
+        currentModel={session.getModel()}
         onSubmit={handleSend}
         onAbort={abort}
         onExit={onExit}

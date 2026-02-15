@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, unlinkSync, existsSync, chmodSync } from "fs";
-import { join } from "path";
+import { readFileSync, writeFileSync, unlinkSync, existsSync, chmodSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
 import { getReporterDir } from "../config.js";
 import { log, error } from "../utils/log.js";
 
@@ -303,6 +303,7 @@ export async function loginOpenAI(): Promise<void> {
   const stored = isHeadless ? await loginDevice() : await loginBrowser();
 
   const oauthPath = OAUTH_FILE();
+  mkdirSync(dirname(oauthPath), { recursive: true });
   writeFileSync(oauthPath, JSON.stringify(stored, null, 2));
   chmodSync(oauthPath, 0o600);
 
