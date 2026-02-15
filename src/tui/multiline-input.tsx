@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput } from "ink";
 import chalk from "chalk";
 
@@ -44,10 +44,14 @@ export function MultiLineInput({
   disableVerticalNav = false,
 }: MultiLineInputProps) {
   const [cursorOffset, setCursorOffset] = useState(value.length);
+  const cursorManagedRef = useRef(false);
 
-  // Clamp cursor when value changes externally (e.g., reset to "")
+  // When value changes externally (autocomplete, clear), move cursor to end
   useEffect(() => {
-    setCursorOffset((prev) => Math.min(prev, value.length));
+    if (!cursorManagedRef.current) {
+      setCursorOffset(value.length);
+    }
+    cursorManagedRef.current = false;
   }, [value]);
 
   useInput(
@@ -65,6 +69,7 @@ export function MultiLineInput({
       if (input === "\n") {
         const before = value.slice(0, cursorOffset);
         const after = value.slice(cursorOffset);
+        cursorManagedRef.current = true;
         onChange(before + "\n" + after);
         setCursorOffset(cursorOffset + 1);
         return;
@@ -106,6 +111,7 @@ export function MultiLineInput({
         if (cursorOffset > 0) {
           const before = value.slice(0, cursorOffset - 1);
           const after = value.slice(cursorOffset);
+          cursorManagedRef.current = true;
           onChange(before + after);
           setCursorOffset(cursorOffset - 1);
         }
@@ -116,6 +122,7 @@ export function MultiLineInput({
       if (input && !key.ctrl && !key.meta) {
         const before = value.slice(0, cursorOffset);
         const after = value.slice(cursorOffset);
+        cursorManagedRef.current = true;
         onChange(before + input + after);
         setCursorOffset(cursorOffset + input.length);
       }
