@@ -4,8 +4,10 @@ import { getEnabledServers } from "./mcp/registry.js";
 import { MCPClientManager } from "./mcp/client.js";
 import { AnthropicProvider } from "./llm/anthropic.js";
 import { runAgent } from "./llm/agent.js";
-import { buildSystemPrompt, buildUserMessage } from "./report/prompt.js";
+import { buildSystemPrompt, buildUserMessage, buildScheduleUserMessage } from "./report/prompt.js";
 import { loadRelevantReports, saveReport, listReports } from "./report/memory.js";
+import { getSchedule } from "./schedule/store.js";
+import { sendNotification } from "./schedule/notify.js";
 import { VectorDB } from "./memory/vectordb.js";
 import { EmbeddingClient } from "./memory/embeddings.js";
 import { loginGitHub, logoutGitHub, loadStoredGitHubToken } from "./auth/github.js";
@@ -803,42 +805,91 @@ function cmdHistory() {
   }
 }
 
-function cmdSchedule() {
-  const everyIdx = args.indexOf("--every");
-  if (everyIdx === -1 || !args[everyIdx + 1]) {
-    console.log('Usage: reporter schedule --every "9am"');
-    console.log('       reporter schedule --every "*/6h"');
-    console.log('       reporter schedule --every "*/15m"');
+async function cmdSchedule() {
+  if (args[1] === "run") {
+    return cmdScheduleRun();
+  }
+
+  console.log(`Usage:
+  reporter schedule run <name>    Run a scheduled report (used by cron)
+
+Manage schedules interactively in chat:
+  /schedule                       List schedules
+  /schedule add                   Create a new schedule
+  /schedule remove <name>         Remove a schedule`);
+}
+
+async function cmdScheduleRun() {
+  const name = args[2];
+  if (!name) {
+    error("Missing schedule name. Usage: reporter schedule run <name>");
     process.exit(1);
   }
 
-  const time = args[everyIdx + 1];
-  const binPath = process.argv[1];
-
-  // Parse simple time formats
-  let cronExpr: string;
-  if (time.match(/^\d{1,2}(am|pm)$/i)) {
-    let hour = parseInt(time);
-    if (time.toLowerCase().includes("pm") && hour !== 12) hour += 12;
-    if (time.toLowerCase().includes("am") && hour === 12) hour = 0;
-    cronExpr = `0 ${hour} * * *`;
-  } else if (time.match(/^\*\/\d+h$/)) {
-    const hours = parseInt(time.slice(2));
-    cronExpr = `0 */${hours} * * *`;
-  } else if (time.match(/^\*\/\d+m$/)) {
-    const minutes = parseInt(time.slice(2));
-    cronExpr = `*/${minutes} * * * *`;
-  } else {
-    // Assume raw cron expression
-    cronExpr = time;
+  const schedule = getSchedule(name);
+  if (!schedule) {
+    error(`No schedule named "${name}" found.`);
+    process.exit(1);
   }
 
-  const cronLine = `${cronExpr} ${process.execPath} ${binPath} run`;
+  if (!configExists()) {
+    error(`Config not found. Run "reporter init" first.`);
+    process.exit(1);
+  }
 
-  console.log("Add this to your crontab (crontab -e):\n");
-  console.log(`  ${cronLine}`);
-  console.log("\nOr run:");
-  console.log(`  (crontab -l 2>/dev/null; echo "${cronLine}") | crontab -`);
+  const config = loadConfig();
+  const servers = getEnabledServers(config);
+
+  // Merge custom MCP servers
+  let customServerNames: string[] = [];
+  try {
+    const mcpConfig = loadMCPConfig();
+    const customServers = mcpConfigToServers(mcpConfig);
+    customServerNames = customServers.map((s) => s.name);
+    servers.push(...customServers);
+  } catch (e) {
+    error(`Failed to load .mcp.json: ${e instanceof Error ? e.message : e}`);
+  }
+
+  if (servers.length === 0) {
+    const msg = "No integrations enabled.";
+    error(msg);
+    await sendNotification("Reporter", name, msg);
+    process.exit(1);
+  }
+
+  const mcpClient = new MCPClientManager(config.github.orgs ?? []);
+
+  try {
+    await mcpClient.connect(servers);
+
+    const { content: pastReports, usedVectorSearch } = await loadRelevantReports(config);
+    const systemPrompt = buildSystemPrompt(config, pastReports, customServerNames, usedVectorSearch);
+    const userMessage = buildScheduleUserMessage(config, schedule.prompt || undefined);
+
+    const provider = new AnthropicProvider(config);
+    const report = await runAgent(provider, mcpClient, systemPrompt, userMessage);
+
+    // Save with schedule-specific filename
+    const { writeFileSync, mkdirSync } = await import("fs");
+    const { join } = await import("path");
+    const { homedir } = await import("os");
+    const dir = config.report.output_dir.replace("~", homedir());
+    mkdirSync(dir, { recursive: true });
+    const date = new Date().toISOString().split("T")[0];
+    const path = join(dir, `${date}-${name}.md`);
+    writeFileSync(path, report);
+
+    log(`Report saved to ${path}`);
+    await sendNotification("Reporter", name, "Report generated successfully.");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    error(msg);
+    await sendNotification("Reporter", `${name} failed`, msg.slice(0, 200));
+    process.exit(1);
+  } finally {
+    await mcpClient.disconnect();
+  }
 }
 
 function cmdHelp() {
@@ -870,7 +921,7 @@ Commands:
   reporter memory notes                List stored notes
   reporter memory forget <date>        Remove a note by date
   reporter history                     List past reports
-  reporter schedule --every "9am"      Show crontab entry for scheduling
+  reporter schedule run <name>         Run a scheduled report (used by cron)
 
 Options:
   -v, --version                    Show version

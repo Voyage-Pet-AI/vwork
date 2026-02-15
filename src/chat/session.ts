@@ -103,12 +103,12 @@ export class ChatSession {
               const raw = await this.mcpClient.callTool(tc.name, tc.input);
               result = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);
             }
-            callbacks.onToolEnd(tc);
+            callbacks.onToolEnd(tc, result, false);
             return { tool_use_id: tc.id, content: result };
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             error(`Tool ${tc.name} failed: ${msg}`);
-            callbacks.onToolEnd(tc);
+            callbacks.onToolEnd(tc, `Error: ${msg}`, true);
             return { tool_use_id: tc.id, content: `Error: ${msg}`, is_error: true as const };
           }
         })

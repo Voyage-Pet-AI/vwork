@@ -40,3 +40,71 @@ export function toolCallSummary(tc: ToolCall): string {
 
   return "";
 }
+
+const FRIENDLY_NAMES: Record<string, string> = {
+  reporter__bash: "Bash",
+  reporter__read_file: "Read",
+  reporter__write_file: "Write",
+  reporter__list_files: "ListFiles",
+  reporter__glob: "Glob",
+  reporter__grep: "Grep",
+  reporter__webfetch: "WebFetch",
+};
+
+/** Map raw tool name to a short display name. */
+export function friendlyToolName(rawName: string): string {
+  if (FRIENDLY_NAMES[rawName]) return FRIENDLY_NAMES[rawName];
+  // MCP tools: "github__search_issues" → "github search_issues"
+  if (rawName.includes("__")) {
+    const [server, tool] = rawName.split("__", 2);
+    return `${server} ${tool}`;
+  }
+  return rawName;
+}
+
+function countLines(s: string): number {
+  if (!s) return 0;
+  return s.split("\n").length;
+}
+
+function firstLine(s: string): string {
+  const line = s.split("\n")[0] ?? "";
+  return truncate(line, 60);
+}
+
+/** Produce a brief result summary for display. */
+export function toolResultSummary(toolName: string, result: string, isError?: boolean): string {
+  if (isError) return firstLine(result);
+
+  const lines = countLines(result);
+
+  switch (toolName) {
+    case "reporter__bash": {
+      if (!result.trim()) return "(no output)";
+      const fl = firstLine(result);
+      return lines > 1 ? `${fl} (+${lines - 1} lines)` : fl;
+    }
+    case "reporter__read_file":
+      return `Read ${lines} lines`;
+    case "reporter__write_file":
+      return firstLine(result) || "Written";
+    case "reporter__glob":
+    case "reporter__list_files": {
+      const count = result.trim() ? result.trim().split("\n").length : 0;
+      return `${count} file${count !== 1 ? "s" : ""}`;
+    }
+    case "reporter__grep": {
+      const count = result.trim() ? result.trim().split("\n").length : 0;
+      return `${count} match${count !== 1 ? "es" : ""}`;
+    }
+    case "reporter__webfetch": {
+      const kb = (new TextEncoder().encode(result).length / 1024).toFixed(1);
+      return `${kb}KB fetched`;
+    }
+    default: {
+      // MCP / unknown: line count or first line
+      if (lines > 3) return `${lines} lines`;
+      return firstLine(result) || `${lines} lines`;
+    }
+  }
+}

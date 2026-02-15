@@ -34,7 +34,7 @@ export interface Message {
 export interface StreamCallbacks {
   onText: (delta: string) => void;
   onToolStart: (toolCall: ToolCall) => void;
-  onToolEnd: (toolCall: ToolCall) => void;
+  onToolEnd: (toolCall: ToolCall, result: string, isError?: boolean) => void;
   onComplete: () => void;
   onError: (error: Error) => void;
 }

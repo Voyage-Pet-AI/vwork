@@ -55,3 +55,12 @@ ${extraServerNames.length > 0 ? `## Additional Tools\nYou also have access to to
 export function buildUserMessage(config: Config): string {
   return `Generate my work report for today. Look back ${config.report.lookback_days} day(s).`;
 }
+
+export function buildScheduleUserMessage(config: Config, customPrompt?: string): string {
+  const today = new Date().toISOString().split("T")[0];
+  const lookback = config.report.lookback_days;
+  if (customPrompt) {
+    return `${customPrompt}\n\nLook back ${lookback} day(s). Today is ${today}.`;
+  }
+  return buildUserMessage(config);
+}

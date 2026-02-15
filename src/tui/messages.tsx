@@ -4,20 +4,32 @@ import type { DisplayMessage, DisplayToolCall } from "./types.js";
 import { renderMarkdown } from "./markdown.js";
 
 function ToolCallLine({ tc }: { tc: DisplayToolCall }) {
+  const icon = tc.status === "running" ? (
+    <Text color="yellow"><Spinner type="dots" /></Text>
+  ) : tc.status === "error" ? (
+    <Text color="red">{"⏺"}</Text>
+  ) : (
+    <Text color="cyan">{"⏺"}</Text>
+  );
+
+  const argText = tc.summary ? `(${tc.summary})` : "";
+
   return (
-    <Box>
-      <Text dimColor>{"  "}</Text>
-      {tc.status === "running" ? (
-        <Text color="yellow">
-          <Spinner type="dots" />
-        </Text>
-      ) : tc.status === "error" ? (
-        <Text color="red">x</Text>
-      ) : (
-        <Text color="green">{"■"}</Text>
+    <Box flexDirection="column">
+      <Box>
+        <Text>{"  "}</Text>
+        {icon}
+        <Text bold>{" "}{tc.displayName}</Text>
+        {argText ? <Text dimColor>{argText}</Text> : null}
+      </Box>
+      {tc.resultSummary && tc.status !== "running" && (
+        <Box>
+          <Text dimColor>{"    ⎿  "}</Text>
+          <Text dimColor color={tc.status === "error" ? "red" : undefined}>
+            {tc.resultSummary}
+          </Text>
+        </Box>
       )}
-      <Text dimColor>{" "}{tc.displayName}</Text>
-      {tc.summary ? <Text dimColor>{" "}{tc.summary}</Text> : null}
     </Box>
   );
 }

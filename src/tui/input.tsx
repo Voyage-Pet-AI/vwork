@@ -7,6 +7,7 @@ import { useFileSearch } from "./use-file-search.js";
 
 const SLASH_COMMANDS = [
   { name: "help", description: "Show this help" },
+  { name: "schedule", description: "Manage scheduled reports" },
   { name: "copy", description: "Copy last response to clipboard" },
   { name: "clear", description: "Clear conversation history" },
   { name: "exit", aliases: ["quit", "q"], description: "Exit chat" },
@@ -22,9 +23,10 @@ interface ChatInputProps {
   onClear: () => void;
   onHelp: () => void;
   onCopy: () => void;
+  onSchedule: (subcommand: string) => void;
 }
 
-export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp, onCopy }: ChatInputProps) {
+export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [ctrlCPending, setCtrlCPending] = useState(false);
@@ -61,6 +63,7 @@ export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp, 
     setValue("");
     switch (cmd.name) {
       case "help": onHelp(); return;
+      case "schedule": onSchedule(""); return;
       case "copy": onCopy(); return;
       case "clear": onClear(); return;
       case "exit": onExit(); return;
@@ -181,6 +184,11 @@ export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp, 
       case "/copy":
         onCopy();
         return;
+      case "/schedule": {
+        const rest = trimmed.slice("/schedule".length).trim();
+        onSchedule(rest);
+        return;
+      }
     }
 
     onSubmit(trimmed);
