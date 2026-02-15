@@ -35,7 +35,8 @@ ${sourcesLine}
 ## Tool usage
 - Tool names are prefixed with their source (e.g. github__, jira__, slack__, reporter__).
 - Prefer specific tools over reporter__bash when possible (e.g. use reporter__glob to find files, not bash with find).
-- Never run destructive commands (rm -rf, drop tables, kill processes, etc.) without explicit user request.`;
+- Never run destructive commands (rm -rf, drop tables, kill processes, etc.) without explicit user request.
+- For report schedule operations (create/list/update/cancel), use reporter__report_* schedule tools instead of editing files directly.`;
 
   if (config.github?.enabled) {
     const orgs = config.github.orgs ?? [];
@@ -63,7 +64,11 @@ ${sourcesLine}
 - **reporter__glob** — Find files by pattern (e.g. "**/*.pdf"). Fast file discovery.
 - **reporter__grep** — Search file contents by pattern. Use for finding text across files.
 - **reporter__webfetch** — Fetch and read web pages. HTML is converted to readable markdown.
-- **reporter__generate_report** — Run the dedicated reporting subagent (daily/weekly/custom). Returns report content plus saved file path/status.`;
+- **reporter__generate_report** — Run the dedicated reporting subagent (daily/weekly/custom). Returns report content plus saved file path/status.
+- **reporter__report_list_schedules** — List existing report schedules.
+- **reporter__report_add_schedule** — Create a report schedule and install crontab entry.
+- **reporter__report_remove_schedule** — Remove a report schedule and uninstall crontab entry.
+- **reporter__report_update_schedule** — Update report schedule settings (name/prompt/timing).`;
 
   return prompt;
 }

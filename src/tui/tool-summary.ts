@@ -34,6 +34,12 @@ export function toolCallSummary(tc: ToolCall): string {
       const lookback = typeof inp.lookback_days === "number" ? inp.lookback_days : "";
       return `${kind}${lookback ? ` ${lookback}d` : ""}`;
     }
+    case "reporter__report_add_schedule":
+    case "reporter__report_remove_schedule":
+    case "reporter__report_update_schedule":
+      return inp.name ? truncate(String(inp.name)) : "";
+    case "reporter__report_list_schedules":
+      return "";
   }
 
   // MCP tools — try common argument names
@@ -55,6 +61,10 @@ const FRIENDLY_NAMES: Record<string, string> = {
   reporter__grep: "Grep",
   reporter__webfetch: "WebFetch",
   reporter__generate_report: "GenerateReport",
+  reporter__report_list_schedules: "ListSchedules",
+  reporter__report_add_schedule: "AddSchedule",
+  reporter__report_remove_schedule: "RemoveSchedule",
+  reporter__report_update_schedule: "UpdateSchedule",
 };
 
 /** Map raw tool name to a short display name. */
@@ -115,6 +125,11 @@ export function toolResultSummary(toolName: string, result: string, isError?: bo
       } catch {}
       return "report generated";
     }
+    case "reporter__report_list_schedules":
+    case "reporter__report_add_schedule":
+    case "reporter__report_remove_schedule":
+    case "reporter__report_update_schedule":
+      return firstLine(result) || "ok";
     default: {
       // MCP / unknown: line count or first line
       if (lines > 3) return `${lines} lines`;

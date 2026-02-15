@@ -11,6 +11,10 @@ import {
   reporterGenerateReportTools,
   executeReporterGenerateReportTool,
 } from "./reporter-generate-report.js";
+import {
+  reportScheduleTools,
+  executeReportScheduleTool,
+} from "./report-schedule.js";
 
 export interface BuiltinToolContext {
   provider?: LLMProvider;
@@ -27,6 +31,7 @@ export function getBuiltinTools(): LLMTool[] {
     ...grepTools,
     ...webfetchTools,
     ...reporterGenerateReportTools,
+    ...reportScheduleTools,
   ];
 }
 
@@ -63,6 +68,12 @@ export async function executeBuiltinTool(
         config: context.config,
         customServerNames: context.customServerNames ?? [],
       });
+
+    case "reporter__report_list_schedules":
+    case "reporter__report_add_schedule":
+    case "reporter__report_remove_schedule":
+    case "reporter__report_update_schedule":
+      return executeReportScheduleTool(tc);
 
     default:
       throw new Error(`Unknown built-in tool: ${tc.name}`);
