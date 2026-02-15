@@ -40,9 +40,15 @@ const SLASH_COMMANDS = [
 
 type SlashCommand = (typeof SLASH_COMMANDS)[number];
 
+const PROVIDERS = [
+  { name: "anthropic", label: "Anthropic" },
+  { name: "openai", label: "OpenAI" },
+];
+
 interface ChatInputProps {
   status: AppStatus;
   activityInfo?: ActivityInfo | null;
+  currentProvider: string;
   onSubmit: (text: string) => void;
   onAbort: () => void;
   onExit: () => void;
@@ -51,13 +57,14 @@ interface ChatInputProps {
   onCopy: () => void;
   onSchedule: (subcommand: string) => void;
   onModel: () => void;
-  onConnect: () => void;
+  onConnect: (provider: string) => void;
 }
 
-export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel, onConnect }: ChatInputProps) {
+export function ChatInput({ status, activityInfo, currentProvider, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel, onConnect }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [ctrlCPending, setCtrlCPending] = useState(false);
+  const [connectPopover, setConnectPopover] = useState(false);
   const ctrlCTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isBusy = status !== "idle";
   const elapsed = useElapsed(activityInfo?.startTime ?? null);
@@ -86,13 +93,13 @@ export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onC
   const { files: fileResults, loading: filesLoading } = useFileSearch(atQuery);
   const showFilePopover = atQuery !== null && (fileResults.length > 0 || filesLoading);
 
-  const showPopover = showSlashPopover || showFilePopover;
+  const showPopover = showSlashPopover || showFilePopover || connectPopover;
 
   const executeCommand = (cmd: SlashCommand) => {
     setValue("");
     switch (cmd.name) {
       case "help": onHelp(); return;
-      case "connect": onConnect(); return;
+      case "connect": setConnectPopover(true); setSelectedIndex(0); return;
       case "model": onModel(); return;
       case "schedule": onSchedule(""); return;
       case "copy": onCopy(); return;
@@ -137,46 +144,76 @@ export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onC
     // Any other input resets the Ctrl+C pending state
     if (ctrlCPending) resetCtrlC();
 
-    if (isBusy && key.escape) {
-      onAbort();
+    if (key.escape) {
+      if (connectPopover) {
+        setConnectPopover(false);
+        return;
+      }
+      if (isBusy) {
+        onAbort();
+        return;
+      }
       return;
     }
 
     if (!showPopover) return;
 
-    const itemCount = showSlashPopover ? filteredCommands.length : fileResults.length;
+    const itemCount = connectPopover
+      ? PROVIDERS.length
+      : showSlashPopover
+        ? filteredCommands.length
+        : fileResults.length;
     if (itemCount === 0) return;
 
     if (key.upArrow) {
       setSelectedIndex(i => (i > 0 ? i - 1 : itemCount - 1));
     } else if (key.downArrow) {
       setSelectedIndex(i => (i < itemCount - 1 ? i + 1 : 0));
-    } else if (key.tab) {
-      if (showSlashPopover) {
+    } else if (key.tab || (key.rightArrow && (showSlashPopover || connectPopover))) {
+      if (connectPopover) {
+        const provider = PROVIDERS[Math.min(selectedIndex, PROVIDERS.length - 1)];
+        if (provider) {
+          setConnectPopover(false);
+          onConnect(provider.name);
+        }
+      } else if (showSlashPopover) {
         const cmd = filteredCommands[Math.min(selectedIndex, filteredCommands.length - 1)];
-        if (cmd) executeCommand(cmd);
+        if (cmd) {
+          if (key.rightArrow) {
+            handleChange(`/${cmd.name}`);
+          } else {
+            executeCommand(cmd);
+          }
+        }
       } else if (showFilePopover) {
         const file = fileResults[Math.min(selectedIndex, fileResults.length - 1)];
         if (file) selectFile(file);
       }
-    } else if (key.rightArrow) {
-      if (showSlashPopover) {
-        const cmd = filteredCommands[Math.min(selectedIndex, filteredCommands.length - 1)];
-        if (cmd) handleChange(`/${cmd.name}`);
-      } else if (showFilePopover) {
-        const file = fileResults[Math.min(selectedIndex, fileResults.length - 1)];
-        if (file) selectFile(file);
-      }
+    } else if (key.rightArrow && showFilePopover) {
+      const file = fileResults[Math.min(selectedIndex, fileResults.length - 1)];
+      if (file) selectFile(file);
     }
   });
 
   const handleChange = (newValue: string) => {
     setValue(newValue);
     setSelectedIndex(0);
+    if (connectPopover) setConnectPopover(false);
   };
 
   const handleSubmit = (text: string) => {
     const trimmed = text.trim();
+
+    // If connect popover is showing, select the highlighted provider
+    if (connectPopover) {
+      const provider = PROVIDERS[Math.min(selectedIndex, PROVIDERS.length - 1)];
+      if (provider) {
+        setConnectPopover(false);
+        setValue("");
+        onConnect(provider.name);
+      }
+      return;
+    }
 
     // Empty submit while busy → abort
     if (!trimmed && isBusy) {
@@ -224,7 +261,8 @@ export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onC
         onCopy();
         return;
       case "/connect":
-        onConnect();
+        setConnectPopover(true);
+        setSelectedIndex(0);
         return;
       case "/model":
         onModel();
@@ -259,7 +297,23 @@ export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onC
           disableVerticalNav={showPopover}
         />
       </Box>
-      {showSlashPopover ? (
+      {connectPopover ? (
+        <Box flexDirection="column" paddingLeft={2}>
+          {PROVIDERS.map((p, i) => (
+            <Text key={p.name}>
+              {i === selectedIndex ? (
+                <Text color="cyan" bold>{"❯ "}</Text>
+              ) : (
+                <Text>{"  "}</Text>
+              )}
+              <Text color={i === selectedIndex ? "cyan" : undefined} bold={i === selectedIndex}>
+                {p.label}
+              </Text>
+              {p.name === currentProvider && <Text dimColor>{"  (current)"}</Text>}
+            </Text>
+          ))}
+        </Box>
+      ) : showSlashPopover ? (
         <Box flexDirection="column" paddingLeft={2}>
           {filteredCommands.map((cmd, i) => (
             <Text key={cmd.name}>

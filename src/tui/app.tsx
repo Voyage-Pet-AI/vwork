@@ -3,6 +3,7 @@ import { render, Box } from "ink";
 import type { ChatSession } from "../chat/session.js";
 import type { StreamCallbacks, ToolCall } from "../llm/provider.js";
 import type { DisplayMessage, DisplayToolCall, AppStatus, ConnectedService, ActivityInfo } from "./types.js";
+import { getTextContent, getToolCalls } from "./types.js";
 import { Header } from "./header.js";
 import { CompletedMessages, ActiveMessage, QueuedMessages } from "./messages.js";
 import { ChatInput } from "./input.js";
@@ -27,6 +28,16 @@ function nextId(): string {
   return String(++msgCounter);
 }
 
+/** Helper to append text to the blocks array, merging into the last text block if possible. */
+function appendText(msg: DisplayMessage, delta: string) {
+  const last = msg.blocks[msg.blocks.length - 1];
+  if (last && last.type === "text") {
+    last.text += delta;
+  } else {
+    msg.blocks.push({ type: "text", text: delta });
+  }
+}
+
 function App({ session, config, services, onExit }: AppProps) {
   const [completedMessages, setCompletedMessages] = useState<DisplayMessage[]>([]);
   const [activeMessage, setActiveMessage] = useState<DisplayMessage | null>(null);
@@ -42,8 +53,10 @@ function App({ session, config, services, onExit }: AppProps) {
   const finalizeActive = useCallback(() => {
     if (activeRef.current) {
       // Mark any remaining running tool calls as done
-      for (const tc of activeRef.current.toolCalls) {
-        if (tc.status === "running") tc.status = "done";
+      for (const block of activeRef.current.blocks) {
+        if (block.type === "tool_call" && block.toolCall.status === "running") {
+          block.toolCall.status = "done";
+        }
       }
       setCompletedMessages((prev) => [...prev, activeRef.current!]);
       activeRef.current = null;
@@ -63,8 +76,7 @@ function App({ session, config, services, onExit }: AppProps) {
     const assistantMsg: DisplayMessage = {
       id: nextId(),
       role: "assistant",
-      content: "",
-      toolCalls: [],
+      blocks: [],
     };
     activeRef.current = assistantMsg;
     setActiveMessage({ ...assistantMsg });
@@ -75,7 +87,7 @@ function App({ session, config, services, onExit }: AppProps) {
     const callbacks: StreamCallbacks = {
       onText: (delta: string) => {
         if (activeRef.current) {
-          activeRef.current.content += delta;
+          appendText(activeRef.current, delta);
           setActiveMessage({ ...activeRef.current });
         }
         if (activityRef.current) {
@@ -93,7 +105,7 @@ function App({ session, config, services, onExit }: AppProps) {
             summary: toolCallSummary(tc),
             status: "running",
           };
-          activeRef.current.toolCalls.push(displayTc);
+          activeRef.current.blocks.push({ type: "tool_call", toolCall: displayTc });
           setActiveMessage({ ...activeRef.current });
         }
         if (activityRef.current) {
@@ -103,7 +115,7 @@ function App({ session, config, services, onExit }: AppProps) {
       },
       onToolEnd: (tc: ToolCall, result: string, isError?: boolean) => {
         if (activeRef.current) {
-          const found = activeRef.current.toolCalls.find((t) => t.id === tc.id);
+          const found = getToolCalls(activeRef.current).find((t) => t.id === tc.id);
           if (found) {
             found.status = isError ? "error" : "done";
             found.resultSummary = toolResultSummary(tc.name, result, isError);
@@ -121,13 +133,13 @@ function App({ session, config, services, onExit }: AppProps) {
       },
       onError: (err: Error) => {
         if (activeRef.current) {
-          for (const tc of activeRef.current.toolCalls) {
-            if (tc.status === "running") {
-              tc.status = "error";
-              tc.resultSummary = err.message;
+          for (const block of activeRef.current.blocks) {
+            if (block.type === "tool_call" && block.toolCall.status === "running") {
+              block.toolCall.status = "error";
+              block.toolCall.resultSummary = err.message;
             }
           }
-          activeRef.current.content += `\nError: ${err.message}`;
+          appendText(activeRef.current, `\nError: ${err.message}`);
           setActiveMessage({ ...activeRef.current });
         }
       },
@@ -138,11 +150,11 @@ function App({ session, config, services, onExit }: AppProps) {
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         if (activeRef.current) {
-          activeRef.current.content += "\n[aborted]";
+          appendText(activeRef.current, "\n[aborted]");
           setActiveMessage({ ...activeRef.current });
         }
       } else if (activeRef.current) {
-        activeRef.current.content += `\nError: ${err instanceof Error ? err.message : String(err)}`;
+        appendText(activeRef.current, `\nError: ${err instanceof Error ? err.message : String(err)}`);
         setActiveMessage({ ...activeRef.current });
       }
     }
@@ -168,8 +180,7 @@ function App({ session, config, services, onExit }: AppProps) {
       const userMsg: DisplayMessage = {
         id: nextId(),
         role: "user",
-        content: text,
-        toolCalls: [],
+        blocks: [{ type: "text", text }],
         queued: true,
         files: filePaths.length > 0 ? filePaths : undefined,
         _sendContent: enhancedText !== text ? enhancedText : undefined,
@@ -182,8 +193,7 @@ function App({ session, config, services, onExit }: AppProps) {
     const userMsg: DisplayMessage = {
       id: nextId(),
       role: "user",
-      content: text,
-      toolCalls: [],
+      blocks: [{ type: "text", text }],
       files: filePaths.length > 0 ? filePaths : undefined,
     };
     setCompletedMessages((prev) => [...prev, userMsg]);
@@ -205,12 +215,11 @@ function App({ session, config, services, onExit }: AppProps) {
     const userMsg: DisplayMessage = {
       id: next.id,
       role: "user",
-      content: next.content,
-      toolCalls: [],
+      blocks: next.blocks,
       files: next.files,
     };
     setCompletedMessages((prev) => [...prev, userMsg]);
-    processMessage(next._sendContent ?? next.content);
+    processMessage(next._sendContent ?? getTextContent(next));
   }, [status, queuedMessages, processMessage]);
 
   const handleClear = useCallback(() => {
@@ -229,26 +238,24 @@ function App({ session, config, services, onExit }: AppProps) {
 
   const handleCopy = useCallback(() => {
     const last = [...completedMessages].reverse().find(
-      (m) => m.role === "assistant" && m.content.trim()
+      (m) => m.role === "assistant" && getTextContent(m).trim()
     );
     if (!last) {
       const msg: DisplayMessage = {
         id: nextId(),
         role: "assistant",
-        content: "Nothing to copy.",
-        toolCalls: [],
+        blocks: [{ type: "text", text: "Nothing to copy." }],
       };
       setCompletedMessages((prev) => [...prev, msg]);
       return;
     }
     const proc = Bun.spawn(["pbcopy"], { stdin: "pipe" });
-    proc.stdin.write(last.content);
+    proc.stdin.write(getTextContent(last));
     proc.stdin.end();
     const msg: DisplayMessage = {
       id: nextId(),
       role: "assistant",
-      content: "Copied to clipboard.",
-      toolCalls: [],
+      blocks: [{ type: "text", text: "Copied to clipboard." }],
     };
     setCompletedMessages((prev) => [...prev, msg]);
   }, [completedMessages]);
@@ -257,8 +264,7 @@ function App({ session, config, services, onExit }: AppProps) {
     const helpMsg: DisplayMessage = {
       id: nextId(),
       role: "assistant",
-      content: "Commands:\n  /help       Show this help\n  /connect    Switch LLM provider\n  /model      Switch LLM model\n  /schedule   Manage scheduled reports\n  /copy       Copy last response to clipboard\n  /clear      Clear conversation history\n  /exit       Exit chat",
-      toolCalls: [],
+      blocks: [{ type: "text", text: "Commands:\n  /help       Show this help\n  /connect    Switch LLM provider\n  /model      Switch LLM model\n  /schedule   Manage scheduled reports\n  /copy       Copy last response to clipboard\n  /clear      Clear conversation history\n  /exit       Exit chat" }],
     };
     setCompletedMessages((prev) => [...prev, helpMsg]);
   }, []);
@@ -267,8 +273,7 @@ function App({ session, config, services, onExit }: AppProps) {
     const msg: DisplayMessage = {
       id: nextId(),
       role: "assistant",
-      content,
-      toolCalls: [],
+      blocks: [{ type: "text", text: content }],
     };
     setCompletedMessages((prev) => [...prev, msg]);
   }, []);
@@ -279,8 +284,7 @@ function App({ session, config, services, onExit }: AppProps) {
         const userMsg: DisplayMessage = {
           id: nextId(),
           role: "user",
-          content: text,
-          toolCalls: [],
+          blocks: [{ type: "text", text }],
         };
         setCompletedMessages((prev) => [...prev, userMsg]);
         interceptorRef.current = null;
@@ -409,7 +413,7 @@ function App({ session, config, services, onExit }: AppProps) {
     }
 
     addSystemMessage("Unknown subcommand. Usage: `/schedule`, `/schedule add`, `/schedule list`, `/schedule remove <name>`");
-  }, [addSystemMessage, waitForInput]);
+  }, [addSystemMessage, waitForInput, processMessage]);
 
   const handleModel = useCallback(async () => {
     const currentModel = session.getModel();
@@ -437,37 +441,22 @@ function App({ session, config, services, onExit }: AppProps) {
     addSystemMessage(`Model switched to **${chosen}**.`);
   }, [session, addSystemMessage, waitForInput]);
 
-  const handleConnect = useCallback(async () => {
+  const handleConnect = useCallback((providerName: string) => {
     const currentProvider = session.getProviderName();
-    const providers = ["anthropic", "openai"] as const;
 
-    const lines = providers.map((p, i) =>
-      `  \`${i + 1}\` — ${p}${p === currentProvider ? " (current)" : ""}`
-    );
-    addSystemMessage(`Current provider: **${currentProvider}**\n\nSwitch to:\n${lines.join("\n")}`);
-
-    const input = await waitForInput();
-    const num = parseInt(input, 10);
-    const chosen = num >= 1 && num <= providers.length ? providers[num - 1] : input.toLowerCase();
-
-    if (chosen === currentProvider) {
+    if (providerName === currentProvider) {
       addSystemMessage(`Already using **${currentProvider}**.`);
       return;
     }
 
-    if (chosen !== "anthropic" && chosen !== "openai") {
-      addSystemMessage(`Unknown provider "${chosen}". Choose \`anthropic\` or \`openai\`.`);
-      return;
-    }
-
     // Check auth
-    if (chosen === "anthropic") {
+    if (providerName === "anthropic") {
       const auth = hasAnthropicAuth();
       if (auth.mode === "none") {
         addSystemMessage(`No Anthropic auth found. Run \`reporter login anthropic\` first.`);
         return;
       }
-    } else {
+    } else if (providerName === "openai") {
       const auth = hasOpenAIAuth();
       if (auth.mode === "none") {
         addSystemMessage(`No OpenAI auth found. Run \`reporter login openai\` first.`);
@@ -475,8 +464,8 @@ function App({ session, config, services, onExit }: AppProps) {
       }
     }
 
-    const defaultModel = chosen === "openai" ? "gpt-4o" : "claude-sonnet-4-5-20250929";
-    const modifiedConfig: Config = { ...config, llm: { ...config.llm, provider: chosen, model: defaultModel } };
+    const defaultModel = providerName === "openai" ? "gpt-4o" : "claude-sonnet-4-5-20250929";
+    const modifiedConfig: Config = { ...config, llm: { ...config.llm, provider: providerName, model: defaultModel } };
     const newProvider = createProvider(modifiedConfig);
     session.setProvider(newProvider);
 
@@ -491,8 +480,8 @@ function App({ session, config, services, onExit }: AppProps) {
     setActivityInfo(null);
     setStatus("idle");
 
-    addSystemMessage(`Switched to **${chosen}** (model: ${defaultModel}). Conversation cleared.\nUse \`/model\` to change model.`);
-  }, [session, config, addSystemMessage, waitForInput]);
+    addSystemMessage(`Switched to **${providerName}** (model: ${defaultModel}). Conversation cleared.\nUse \`/model\` to change model.`);
+  }, [session, config, addSystemMessage]);
 
   return (
     <Box flexDirection="column">
@@ -503,6 +492,7 @@ function App({ session, config, services, onExit }: AppProps) {
       <ChatInput
         status={status}
         activityInfo={activityInfo}
+        currentProvider={session.getProviderName()}
         onSubmit={handleSend}
         onAbort={abort}
         onExit={onExit}

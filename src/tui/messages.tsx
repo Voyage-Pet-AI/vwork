@@ -1,6 +1,7 @@
 import { Box, Static, Text } from "ink";
 import Spinner from "ink-spinner";
 import type { DisplayMessage, DisplayToolCall } from "./types.js";
+import { getTextContent } from "./types.js";
 import { renderMarkdown } from "./markdown.js";
 
 function ToolCallLine({ tc }: { tc: DisplayToolCall }) {
@@ -41,10 +42,11 @@ function FileAttachmentLine({ files }: { files: string[] }) {
 
 function MessageBubble({ message }: { message: DisplayMessage }) {
   if (message.role === "user") {
+    const userText = getTextContent(message);
     return (
       <Box flexDirection="column" marginTop={1}>
         <Box>
-          <Text color="cyan" bold>{"❯ "}{message.content}</Text>
+          <Text color="cyan" bold>{"❯ "}{userText}</Text>
           {message.queued && <Text color="yellow" bold>{" "}QUEUED</Text>}
         </Box>
         {message.files && message.files.length > 0 && (
@@ -54,16 +56,23 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
     );
   }
 
+  // Assistant: render blocks in chronological order
   return (
     <Box flexDirection="column" marginTop={1}>
-      {message.toolCalls.map((tc) => (
-        <ToolCallLine key={tc.id} tc={tc} />
-      ))}
-      {message.content.length > 0 && (
-        <Box paddingLeft={2}>
-          <Text>{renderMarkdown(message.content)}</Text>
-        </Box>
-      )}
+      {message.blocks.map((block, i) => {
+        if (block.type === "tool_call") {
+          return <ToolCallLine key={block.toolCall.id} tc={block.toolCall} />;
+        }
+        // text block
+        if (block.text.length > 0) {
+          return (
+            <Box key={`text-${i}`} paddingLeft={2}>
+              <Text>{renderMarkdown(block.text)}</Text>
+            </Box>
+          );
+        }
+        return null;
+      })}
     </Box>
   );
 }
