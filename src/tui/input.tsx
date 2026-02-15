@@ -33,7 +33,7 @@ const SLASH_COMMANDS = [
   { name: "auth", description: "Manage LLM authentication" },
   { name: "connect", description: "Switch LLM provider" },
   { name: "model", description: "Switch LLM model" },
-  { name: "schedule", description: "Manage scheduled reports" },
+  { name: "report", aliases: ["schedule"], description: "Manage scheduled reports" },
   { name: "copy", description: "Copy last response to clipboard" },
   { name: "clear", description: "Clear conversation history" },
   { name: "exit", aliases: ["quit", "q"], description: "Exit chat" },
@@ -123,7 +123,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
       case "auth": onAuth(""); return;
       case "connect": setConnectPopover(true); setSelectedIndex(0); return;
       case "model": setModelPopover(true); setSelectedIndex(0); return;
-      case "schedule": onSchedule(""); return;
+      case "report": onSchedule(""); return;
       case "copy": onCopy(); return;
       case "clear": onClear(); return;
       case "exit": onExit(); return;
@@ -325,8 +325,9 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
         setModelPopover(true);
         setSelectedIndex(0);
         return;
+      case "/report":
       case "/schedule": {
-        const rest = trimmed.slice("/schedule".length).trim();
+        const rest = trimmed.replace(/^\/(report|schedule)/, "").trim();
         onSchedule(rest);
         return;
       }

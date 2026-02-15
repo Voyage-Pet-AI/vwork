@@ -873,9 +873,10 @@ async function cmdSchedule() {
   reporter schedule run <name>    Run a scheduled report (used by cron)
 
 Manage schedules interactively in chat:
-  /schedule                       List schedules
-  /schedule add                   Create a new schedule
-  /schedule remove <name>         Remove a schedule`);
+  /report                         List schedules
+  /report add                     Create a new schedule
+  /report remove <name>           Remove a schedule
+  (/schedule is still accepted as an alias)`);
 }
 
 async function cmdScheduleRun() {

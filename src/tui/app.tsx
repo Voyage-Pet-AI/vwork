@@ -475,7 +475,7 @@ function App({ session, config, services, onExit }: AppProps) {
             "  /auth <provider> logout   Remove stored provider auth\n" +
             "  /connect                  Switch LLM provider\n" +
             "  /model                    Switch LLM model\n" +
-            "  /schedule                 Manage scheduled reports\n" +
+            "  /report                   Manage scheduled reports\n" +
             "  /copy                     Copy last response to clipboard\n" +
             "  /clear                    Clear conversation history\n" +
             "  /exit                     Exit chat",
@@ -656,7 +656,7 @@ function App({ session, config, services, onExit }: AppProps) {
         const schedules = listSchedules();
         if (schedules.length === 0) {
           addSystemMessage(
-            "No schedules yet. Use `/schedule add` to create one.",
+            "No schedules yet. Use `/report add` to create one.",
           );
           return;
         }
@@ -691,7 +691,7 @@ function App({ session, config, services, onExit }: AppProps) {
       if (action === "remove") {
         const name = sub[1];
         if (!name) {
-          addSystemMessage("Usage: `/schedule remove <name>`");
+          addSystemMessage("Usage: `/report remove <name>`");
           return;
         }
         const removed = removeSchedule(name);
@@ -722,7 +722,7 @@ function App({ session, config, services, onExit }: AppProps) {
         const existing = listSchedules();
         if (existing.some((s) => s.name === name)) {
           addSystemMessage(
-            `A schedule named "${name}" already exists. Use \`/schedule remove ${name}\` first.`,
+            `A schedule named "${name}" already exists. Use \`/report remove ${name}\` first.`,
           );
           return;
         }
@@ -796,7 +796,7 @@ function App({ session, config, services, onExit }: AppProps) {
       }
 
       addSystemMessage(
-        "Unknown subcommand. Usage: `/schedule`, `/schedule add`, `/schedule list`, `/schedule remove <name>`",
+        "Unknown subcommand. Usage: `/report`, `/report add`, `/report list`, `/report remove <name>`",
       );
     },
     [addSystemMessage, waitForInput, processMessage],
