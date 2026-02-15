@@ -45,6 +45,11 @@ export class ChatSession {
     this.provider.setModel(model);
   }
 
+  setProvider(provider: LLMProvider): void {
+    this.provider = provider;
+    this.messages = [];
+  }
+
   getProviderName(): string {
     return this.provider.providerName;
   }

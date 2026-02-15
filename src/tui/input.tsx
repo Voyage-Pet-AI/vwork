@@ -30,6 +30,7 @@ function useElapsed(startTime: number | null): string {
 
 const SLASH_COMMANDS = [
   { name: "help", description: "Show this help" },
+  { name: "connect", description: "Switch LLM provider" },
   { name: "model", description: "Switch LLM model" },
   { name: "schedule", description: "Manage scheduled reports" },
   { name: "copy", description: "Copy last response to clipboard" },
@@ -50,9 +51,10 @@ interface ChatInputProps {
   onCopy: () => void;
   onSchedule: (subcommand: string) => void;
   onModel: () => void;
+  onConnect: () => void;
 }
 
-export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel }: ChatInputProps) {
+export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel, onConnect }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [ctrlCPending, setCtrlCPending] = useState(false);
@@ -90,6 +92,7 @@ export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onC
     setValue("");
     switch (cmd.name) {
       case "help": onHelp(); return;
+      case "connect": onConnect(); return;
       case "model": onModel(); return;
       case "schedule": onSchedule(""); return;
       case "copy": onCopy(); return;
@@ -219,6 +222,9 @@ export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onC
         return;
       case "/copy":
         onCopy();
+        return;
+      case "/connect":
+        onConnect();
         return;
       case "/model":
         onModel();

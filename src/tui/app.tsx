@@ -10,9 +10,14 @@ import { parseFileMentions, resolveFileMentions, buildMessageWithFiles } from ".
 import { toolCallSummary, friendlyToolName, toolResultSummary } from "./tool-summary.js";
 import { listSchedules, addSchedule, removeSchedule } from "../schedule/store.js";
 import { installCrontabEntry, removeCrontabEntry, parseTimeExpression, getNextRun, formatTimeUntil } from "../schedule/crontab.js";
+import { hasAnthropicAuth } from "../auth/anthropic.js";
+import { hasOpenAIAuth } from "../auth/openai.js";
+import { createProvider } from "../index.js";
+import type { Config } from "../config.js";
 
 interface AppProps {
   session: ChatSession;
+  config: Config;
   services: ConnectedService[];
   onExit: () => void;
 }
@@ -22,7 +27,7 @@ function nextId(): string {
   return String(++msgCounter);
 }
 
-function App({ session, services, onExit }: AppProps) {
+function App({ session, config, services, onExit }: AppProps) {
   const [completedMessages, setCompletedMessages] = useState<DisplayMessage[]>([]);
   const [activeMessage, setActiveMessage] = useState<DisplayMessage | null>(null);
   const [status, setStatus] = useState<AppStatus>("idle");
@@ -252,7 +257,7 @@ function App({ session, services, onExit }: AppProps) {
     const helpMsg: DisplayMessage = {
       id: nextId(),
       role: "assistant",
-      content: "Commands:\n  /help       Show this help\n  /model      Switch LLM model\n  /schedule   Manage scheduled reports\n  /copy       Copy last response to clipboard\n  /clear      Clear conversation history\n  /exit       Exit chat",
+      content: "Commands:\n  /help       Show this help\n  /connect    Switch LLM provider\n  /model      Switch LLM model\n  /schedule   Manage scheduled reports\n  /copy       Copy last response to clipboard\n  /clear      Clear conversation history\n  /exit       Exit chat",
       toolCalls: [],
     };
     setCompletedMessages((prev) => [...prev, helpMsg]);
@@ -292,14 +297,23 @@ function App({ session, services, onExit }: AppProps) {
       const schedules = listSchedules();
       if (schedules.length === 0) {
         addSystemMessage("No schedules yet. Use `/schedule add` to create one.");
-      } else {
-        const lines = schedules.map((s) => {
-          const next = getNextRun(s.cron);
-          const eta = next ? formatTimeUntil(next) : "unknown";
-          return `  **${s.name}** — ${s.frequencyLabel} (next in ${eta})`;
-        });
-        addSystemMessage("Scheduled reports:\n" + lines.join("\n"));
+        return;
       }
+      const lines = schedules.map((s, i) => {
+        const next = getNextRun(s.cron);
+        const eta = next ? formatTimeUntil(next) : "unknown";
+        return `  \`${i + 1}\` — **${s.name}** — ${s.frequencyLabel} (next in ${eta})`;
+      });
+      addSystemMessage("Scheduled reports:\n" + lines.join("\n") + "\n\nPick a number to run now, or press Enter to cancel.");
+      const pick = await waitForInput();
+      if (!pick) return;
+      const idx = parseInt(pick, 10);
+      if (isNaN(idx) || idx < 1 || idx > schedules.length) {
+        addSystemMessage("Invalid selection.");
+        return;
+      }
+      const selected = schedules[idx - 1];
+      await processMessage(selected.prompt || "Generate my work report.");
       return;
     }
 
@@ -423,6 +437,63 @@ function App({ session, services, onExit }: AppProps) {
     addSystemMessage(`Model switched to **${chosen}**.`);
   }, [session, addSystemMessage, waitForInput]);
 
+  const handleConnect = useCallback(async () => {
+    const currentProvider = session.getProviderName();
+    const providers = ["anthropic", "openai"] as const;
+
+    const lines = providers.map((p, i) =>
+      `  \`${i + 1}\` — ${p}${p === currentProvider ? " (current)" : ""}`
+    );
+    addSystemMessage(`Current provider: **${currentProvider}**\n\nSwitch to:\n${lines.join("\n")}`);
+
+    const input = await waitForInput();
+    const num = parseInt(input, 10);
+    const chosen = num >= 1 && num <= providers.length ? providers[num - 1] : input.toLowerCase();
+
+    if (chosen === currentProvider) {
+      addSystemMessage(`Already using **${currentProvider}**.`);
+      return;
+    }
+
+    if (chosen !== "anthropic" && chosen !== "openai") {
+      addSystemMessage(`Unknown provider "${chosen}". Choose \`anthropic\` or \`openai\`.`);
+      return;
+    }
+
+    // Check auth
+    if (chosen === "anthropic") {
+      const auth = hasAnthropicAuth();
+      if (auth.mode === "none") {
+        addSystemMessage(`No Anthropic auth found. Run \`reporter login anthropic\` first.`);
+        return;
+      }
+    } else {
+      const auth = hasOpenAIAuth();
+      if (auth.mode === "none") {
+        addSystemMessage(`No OpenAI auth found. Run \`reporter login openai\` first.`);
+        return;
+      }
+    }
+
+    const defaultModel = chosen === "openai" ? "gpt-4o" : "claude-sonnet-4-5-20250929";
+    const modifiedConfig: Config = { ...config, llm: { ...config.llm, provider: chosen, model: defaultModel } };
+    const newProvider = createProvider(modifiedConfig);
+    session.setProvider(newProvider);
+
+    // Clear TUI display state (same as handleClear)
+    process.stdout.write('\x1B[2J\x1B[3J\x1B[H');
+    setCompletedMessages([]);
+    setActiveMessage(null);
+    setQueuedMessages([]);
+    activeRef.current = null;
+    abortRef.current = null;
+    activityRef.current = null;
+    setActivityInfo(null);
+    setStatus("idle");
+
+    addSystemMessage(`Switched to **${chosen}** (model: ${defaultModel}). Conversation cleared.\nUse \`/model\` to change model.`);
+  }, [session, config, addSystemMessage, waitForInput]);
+
   return (
     <Box flexDirection="column">
       {completedMessages.length === 0 && !activeMessage && <Header services={services} />}
@@ -440,6 +511,7 @@ function App({ session, services, onExit }: AppProps) {
         onCopy={handleCopy}
         onSchedule={handleSchedule}
         onModel={handleModel}
+        onConnect={handleConnect}
       />
     </Box>
   );
@@ -447,6 +519,7 @@ function App({ session, services, onExit }: AppProps) {
 
 interface StartTUIOptions {
   session: ChatSession;
+  config: Config;
   services: ConnectedService[];
 }
 
@@ -460,6 +533,7 @@ export async function startTUI(options: StartTUIOptions): Promise<void> {
     const inkInstance = render(
       <App
         session={options.session}
+        config={options.config}
         services={options.services}
         onExit={handleExit}
       />,

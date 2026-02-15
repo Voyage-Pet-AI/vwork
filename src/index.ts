@@ -44,7 +44,7 @@ import { readLine } from "./utils/readline.js";
 
 import type { LLMProvider } from "./llm/provider.js";
 
-function createProvider(config: Config): LLMProvider {
+export function createProvider(config: Config): LLMProvider {
   switch (config.llm.provider) {
     case "openai":
       return new OpenAIProvider(config);
@@ -441,7 +441,7 @@ async function cmdChat() {
 
     // Build services list for TUI header
     const services = servers.map((s) => ({ name: s.name.charAt(0).toUpperCase() + s.name.slice(1) }));
-    await startTUI({ session, services });
+    await startTUI({ session, config, services });
   } finally {
     await mcpClient.disconnect();
   }
