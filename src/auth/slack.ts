@@ -1,7 +1,53 @@
-import { loadTokens, saveTokens } from "./tokens.js";
+import { loadTokens, saveTokens, getSlackToken } from "./tokens.js";
 import type { SlackTokenData } from "./tokens.js";
 import { log, error } from "../utils/log.js";
 import { readLine } from "../utils/readline.js";
+
+/** Returns true if a Slack token is stored. */
+export function hasSlackAuth(): boolean {
+  return !!getSlackToken();
+}
+
+/** Remove stored Slack token. */
+export function logoutSlack(): void {
+  const store = loadTokens();
+  if (!store.slack) {
+    log("No stored Slack token found.");
+    return;
+  }
+  delete store.slack;
+  saveTokens(store);
+  log("Slack token removed.");
+}
+
+/** Validate a Slack bot token by calling auth.test. Returns team/user info. */
+export async function validateSlackToken(token: string): Promise<{ team: string; user: string; teamId: string }> {
+  const res = await fetch("https://slack.com/api/auth.test", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+  });
+
+  const data = (await res.json()) as {
+    ok: boolean;
+    error?: string;
+    team?: string;
+    team_id?: string;
+    user?: string;
+  };
+
+  if (!data.ok) {
+    throw new Error(`Slack auth.test failed: ${data.error ?? "unknown error"}`);
+  }
+
+  return {
+    team: data.team ?? "unknown",
+    user: data.user ?? "unknown",
+    teamId: data.team_id ?? "unknown",
+  };
+}
 
 /**
  * Prompt the user to paste their Slack Bot User OAuth Token.
@@ -33,6 +79,16 @@ export async function promptSlackToken(): Promise<void> {
     team: { id: "unknown", name: "unknown" },
     obtained_at: new Date().toISOString(),
   };
+
+  // Validate token and backfill team metadata
+  try {
+    const info = await validateSlackToken(token);
+    tokenData.team = { id: info.teamId, name: info.team };
+    log(`Authenticated as "${info.user}" in workspace "${info.team}"`);
+  } catch (e) {
+    error(`Token validation failed: ${e instanceof Error ? e.message : e}`);
+    error("Saving token anyway — you can re-auth later if needed.");
+  }
 
   const store = loadTokens();
   store.slack = tokenData;

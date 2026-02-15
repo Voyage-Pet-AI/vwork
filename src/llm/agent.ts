@@ -14,10 +14,21 @@ const GITHUB_TOOL_WHITELIST = new Set([
   "github__list_pull_requests_for_repo",
 ]);
 
+/** Slack tools allowed for report generation (read-only). */
+const SLACK_TOOL_WHITELIST = new Set([
+  "slack__slack_list_channels",
+  "slack__slack_get_channel_history",
+  "slack__slack_get_thread_replies",
+  "slack__slack_get_users",
+  "slack__slack_get_user_profile",
+  "slack__slack_search_messages",
+]);
+
 export function filterTools(tools: MCPTool[]): MCPTool[] {
   return tools.filter((t) => {
-    if (!t.name.startsWith("github__")) return true;
-    return GITHUB_TOOL_WHITELIST.has(t.name);
+    if (t.name.startsWith("github__")) return GITHUB_TOOL_WHITELIST.has(t.name);
+    if (t.name.startsWith("slack__")) return SLACK_TOOL_WHITELIST.has(t.name);
+    return true;
   });
 }
 

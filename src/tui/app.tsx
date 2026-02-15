@@ -15,7 +15,6 @@ interface AppProps {
   session: ChatSession;
   services: ConnectedService[];
   onExit: () => void;
-  clearOutput: () => void;
 }
 
 let msgCounter = 0;
@@ -23,7 +22,7 @@ function nextId(): string {
   return String(++msgCounter);
 }
 
-function App({ session, services, onExit, clearOutput }: AppProps) {
+function App({ session, services, onExit }: AppProps) {
   const [completedMessages, setCompletedMessages] = useState<DisplayMessage[]>([]);
   const [activeMessage, setActiveMessage] = useState<DisplayMessage | null>(null);
   const [status, setStatus] = useState<AppStatus>("idle");
@@ -41,8 +40,6 @@ function App({ session, services, onExit, clearOutput }: AppProps) {
       for (const tc of activeRef.current.toolCalls) {
         if (tc.status === "running") tc.status = "done";
       }
-      // Reset Ink's internal line counter before shrinking the dynamic area
-      clearOutput();
       setCompletedMessages((prev) => [...prev, activeRef.current!]);
       activeRef.current = null;
       setActiveMessage(null);
@@ -51,7 +48,7 @@ function App({ session, services, onExit, clearOutput }: AppProps) {
     activityRef.current = null;
     setActivityInfo(null);
     setStatus("idle");
-  }, [clearOutput]);
+  }, []);
 
   const processMessage = useCallback(async (text: string) => {
     const controller = new AbortController();
@@ -455,8 +452,6 @@ interface StartTUIOptions {
 
 export async function startTUI(options: StartTUIOptions): Promise<void> {
   return new Promise<void>((resolve) => {
-    const clearRef = { current: () => {} };
-
     const handleExit = () => {
       inkInstance.unmount();
       resolve();
@@ -467,11 +462,8 @@ export async function startTUI(options: StartTUIOptions): Promise<void> {
         session={options.session}
         services={options.services}
         onExit={handleExit}
-        clearOutput={() => clearRef.current()}
       />,
       { exitOnCtrlC: false }
     );
-
-    clearRef.current = () => inkInstance.clear();
   });
 }

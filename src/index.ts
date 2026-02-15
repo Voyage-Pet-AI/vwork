@@ -23,7 +23,7 @@ import {
   hasOpenAIAuth,
 } from "./auth/openai.js";
 import { getSlackToken } from "./auth/tokens.js";
-import { promptSlackToken } from "./auth/slack.js";
+import { promptSlackToken, hasSlackAuth, logoutSlack } from "./auth/slack.js";
 import {
   AtlassianOAuthProvider,
   hasAtlassianAuth,
@@ -339,11 +339,18 @@ function cmdAuthStatus() {
   if (!info.hasTokens) {
     console.log("Atlassian: Not authenticated");
     console.log('  Run "reporter auth login" to authenticate.');
-    return;
+  } else {
+    console.log("Atlassian: Authenticated");
+    if (info.scope) console.log(`  Scope: ${info.scope}`);
+    if (info.expiresIn) console.log(`  Token expires in: ${info.expiresIn}s`);
   }
-  console.log("Atlassian: Authenticated");
-  if (info.scope) console.log(`  Scope: ${info.scope}`);
-  if (info.expiresIn) console.log(`  Token expires in: ${info.expiresIn}s`);
+
+  if (hasSlackAuth()) {
+    console.log("Slack: Token stored");
+  } else {
+    console.log("Slack: Not authenticated");
+    console.log('  Run "reporter login slack" or "reporter auth slack" to authenticate.');
+  }
 }
 
 async function cmdAuthSlack() {
@@ -364,11 +371,14 @@ async function cmdLogin() {
       return loginAnthropicApiKey();
     case "openai":
       return loginOpenAI();
+    case "slack":
+      return promptSlackToken();
     default:
       console.log(`Usage:
   reporter login github               Authenticate with GitHub via browser OAuth
   reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)
-  reporter login openai                Authenticate with OpenAI via OAuth (ChatGPT Pro/Plus)`);
+  reporter login openai                Authenticate with OpenAI via OAuth (ChatGPT Pro/Plus)
+  reporter login slack                 Authenticate with Slack via bot token`);
       process.exit(1);
   }
 }
@@ -382,11 +392,14 @@ async function cmdLogout() {
       return logoutAnthropic();
     case "openai":
       return logoutOpenAI();
+    case "slack":
+      return logoutSlack();
     default:
       console.log(`Usage:
   reporter logout github      Remove stored GitHub token
   reporter logout anthropic   Remove stored Anthropic tokens
-  reporter logout openai      Remove stored OpenAI tokens`);
+  reporter logout openai      Remove stored OpenAI tokens
+  reporter logout slack       Remove stored Slack token`);
       process.exit(1);
   }
 }
@@ -947,6 +960,8 @@ Commands:
   reporter logout openai               Remove stored OpenAI tokens
   reporter login github                Authenticate with GitHub via browser OAuth
   reporter logout github               Remove stored GitHub token
+  reporter login slack                 Authenticate with Slack via bot token
+  reporter logout slack                Remove stored Slack token
   reporter auth login                  Authenticate with Atlassian (Jira) via browser OAuth
   reporter auth logout                 Remove stored Atlassian tokens
   reporter auth status                 Show Atlassian authentication status

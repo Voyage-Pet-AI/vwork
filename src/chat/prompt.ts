@@ -45,6 +45,14 @@ ${sourcesLine}
     prompt += `\n- Start GitHub queries by calling github__get_the_authenticated_user to learn the username.`;
   }
 
+  if (config.slack?.enabled) {
+    const channels = config.slack.channels ?? [];
+    if (channels.length > 0) {
+      prompt += `\n- Slack searches MUST be scoped to these channels: ${channels.join(", ")}. Use \`in:#channel\` syntax.`;
+      prompt += `\n- Do NOT read or search Slack channels outside this list.`;
+    }
+  }
+
   prompt += `
 
 ## Built-in tools (reporter__*)

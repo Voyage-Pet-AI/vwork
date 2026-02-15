@@ -26,7 +26,11 @@ ${config.github.enabled ? `   - GitHub:
         - Recent commits by the user
      4. Do NOT search for repositories. Do NOT search repos outside the configured orgs.` : ""}
 ${config.jira.enabled ? "   - Jira: Search for recently updated issues assigned to or involving the user" : ""}
-${config.slack.enabled ? `   - Slack: Search for relevant messages in channels: ${config.slack.channels.join(", ")}` : ""}
+${config.slack.enabled ? (config.slack.channels.length > 0
+    ? `   - Slack: ONLY search within these channels: ${config.slack.channels.join(", ")}.
+     Use \`in:#channel\` syntax to scope every search query.
+     Do NOT search or browse channels outside this list.`
+    : `   - Slack: No channels configured — skip Slack searches.`) : ""}
 
 2. **Correlate**: Link events across tools. If a Jira ticket ID (e.g. PROJ-123) appears in a GitHub PR title, commit message, or Slack thread — connect them.
 
@@ -48,6 +52,7 @@ Blockers, stale PRs (open > 3 days with no review), unanswered questions, approa
 - Output ONLY the Markdown report. No preamble, no explanation.
 - Tool names are prefixed with the source (e.g. github__*, jira__*, slack__*). Use the right tools for the right source.
 - GitHub searches MUST be scoped to the configured orgs. Never search unrelated public repos.
+- Slack searches MUST be scoped to the configured channels. Never browse unconfigured channels.
 
 ${extraServerNames.length > 0 ? `## Additional Tools\nYou also have access to tools from these custom MCP servers: ${extraServerNames.join(", ")}. Use their tools (prefixed with <server-name>__*) when relevant.\n\n` : ""}${pastReports ? `## Past Reports (for Decision Trail context)${usedVectorSearch ? "\n_Ranked by semantic relevance — scores shown per entry._" : ""}\n\n${pastReports}` : "## Past Reports\nNo previous reports available yet."}`;
 }
