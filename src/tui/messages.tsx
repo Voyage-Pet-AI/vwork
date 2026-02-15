@@ -1,6 +1,7 @@
 import { Box, Static, Text } from "ink";
 import Spinner from "ink-spinner";
 import type { DisplayMessage, DisplayToolCall } from "./types.js";
+import { renderMarkdown } from "./markdown.js";
 
 function ToolCallLine({ tc }: { tc: DisplayToolCall }) {
   return (
@@ -20,12 +21,22 @@ function ToolCallLine({ tc }: { tc: DisplayToolCall }) {
   );
 }
 
+function FileAttachmentLine({ files }: { files: string[] }) {
+  const label = `  [+${files.length} file${files.length > 1 ? "s" : ""}: ${files.join(", ")}]`;
+  return <Text dimColor>{label}</Text>;
+}
+
 function MessageBubble({ message }: { message: DisplayMessage }) {
   if (message.role === "user") {
     return (
-      <Box marginTop={1}>
-        <Text color="cyan" bold>{"❯ "}{message.content}</Text>
-        {message.queued && <Text color="yellow" bold>{" "}QUEUED</Text>}
+      <Box flexDirection="column" marginTop={1}>
+        <Box>
+          <Text color="cyan" bold>{"❯ "}{message.content}</Text>
+          {message.queued && <Text color="yellow" bold>{" "}QUEUED</Text>}
+        </Box>
+        {message.files && message.files.length > 0 && (
+          <FileAttachmentLine files={message.files} />
+        )}
       </Box>
     );
   }
@@ -36,7 +47,9 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
         <ToolCallLine key={tc.id} tc={tc} />
       ))}
       {message.content.length > 0 && (
-        <Text>{"  "}{message.content}</Text>
+        <Box paddingLeft={2}>
+          <Text>{renderMarkdown(message.content)}</Text>
+        </Box>
       )}
     </Box>
   );

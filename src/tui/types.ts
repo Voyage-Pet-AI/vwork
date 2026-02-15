@@ -11,6 +11,8 @@ export interface DisplayMessage {
   content: string;
   toolCalls: DisplayToolCall[];
   queued?: boolean;
+  files?: string[];           // attached file paths for display
+  _sendContent?: string;      // enhanced text with file data (internal)
 }
 
 export type AppStatus = "idle" | "streaming" | "tool_running";

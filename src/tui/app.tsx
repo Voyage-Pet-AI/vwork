@@ -6,6 +6,7 @@ import type { DisplayMessage, DisplayToolCall, AppStatus, ConnectedService } fro
 import { Header } from "./header.js";
 import { CompletedMessages, ActiveMessage, QueuedMessages } from "./messages.js";
 import { ChatInput } from "./input.js";
+import { parseFileMentions, resolveFileMentions, buildMessageWithFiles } from "./file-mentions.js";
 
 interface AppProps {
   session: ChatSession;
@@ -128,8 +129,12 @@ function App({ session, services, onExit }: AppProps) {
     finalizeActive();
   }, [session, finalizeActive]);
 
-  const handleSend = useCallback((text: string) => {
+  const handleSend = useCallback(async (text: string) => {
     const isBusy = status !== "idle";
+    const mentionedPaths = parseFileMentions(text);
+    const mentions = mentionedPaths.length > 0 ? await resolveFileMentions(mentionedPaths) : [];
+    const enhancedText = mentions.length > 0 ? buildMessageWithFiles(text, mentions) : text;
+    const filePaths = mentions.map((m) => m.path);
 
     if (isBusy) {
       // Queue the message
@@ -139,6 +144,8 @@ function App({ session, services, onExit }: AppProps) {
         content: text,
         toolCalls: [],
         queued: true,
+        files: filePaths.length > 0 ? filePaths : undefined,
+        _sendContent: enhancedText !== text ? enhancedText : undefined,
       };
       setQueuedMessages((prev) => [...prev, userMsg]);
       return;
@@ -150,9 +157,10 @@ function App({ session, services, onExit }: AppProps) {
       role: "user",
       content: text,
       toolCalls: [],
+      files: filePaths.length > 0 ? filePaths : undefined,
     };
     setCompletedMessages((prev) => [...prev, userMsg]);
-    processMessage(text);
+    processMessage(enhancedText);
   }, [status, processMessage]);
 
   const abort = useCallback(() => {
@@ -172,9 +180,10 @@ function App({ session, services, onExit }: AppProps) {
       role: "user",
       content: next.content,
       toolCalls: [],
+      files: next.files,
     };
     setCompletedMessages((prev) => [...prev, userMsg]);
-    processMessage(next.content);
+    processMessage(next._sendContent ?? next.content);
   }, [status, queuedMessages, processMessage]);
 
   const handleClear = useCallback(() => {
@@ -189,11 +198,37 @@ function App({ session, services, onExit }: AppProps) {
     setStatus("idle");
   }, [session]);
 
+  const handleCopy = useCallback(() => {
+    const last = [...completedMessages].reverse().find(
+      (m) => m.role === "assistant" && m.content.trim()
+    );
+    if (!last) {
+      const msg: DisplayMessage = {
+        id: nextId(),
+        role: "assistant",
+        content: "Nothing to copy.",
+        toolCalls: [],
+      };
+      setCompletedMessages((prev) => [...prev, msg]);
+      return;
+    }
+    const proc = Bun.spawn(["pbcopy"], { stdin: "pipe" });
+    proc.stdin.write(last.content);
+    proc.stdin.end();
+    const msg: DisplayMessage = {
+      id: nextId(),
+      role: "assistant",
+      content: "Copied to clipboard.",
+      toolCalls: [],
+    };
+    setCompletedMessages((prev) => [...prev, msg]);
+  }, [completedMessages]);
+
   const handleHelp = useCallback(() => {
     const helpMsg: DisplayMessage = {
       id: nextId(),
       role: "assistant",
-      content: "Commands:\n  /help     Show this help\n  /clear    Clear conversation history\n  /exit     Exit chat",
+      content: "Commands:\n  /help     Show this help\n  /copy     Copy last response to clipboard\n  /clear    Clear conversation history\n  /exit     Exit chat",
       toolCalls: [],
     };
     setCompletedMessages((prev) => [...prev, helpMsg]);
@@ -212,6 +247,7 @@ function App({ session, services, onExit }: AppProps) {
         onExit={onExit}
         onClear={handleClear}
         onHelp={handleHelp}
+        onCopy={handleCopy}
       />
     </Box>
   );
@@ -238,7 +274,5 @@ export async function startTUI(options: StartTUIOptions): Promise<void> {
       { exitOnCtrlC: false }
     );
 
-    // Handle Ctrl+C at the Ink level
-    process.on("SIGINT", handleExit);
   });
 }
