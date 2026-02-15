@@ -156,6 +156,14 @@ export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onC
         const file = fileResults[Math.min(selectedIndex, fileResults.length - 1)];
         if (file) selectFile(file);
       }
+    } else if (key.rightArrow) {
+      if (showSlashPopover) {
+        const cmd = filteredCommands[Math.min(selectedIndex, filteredCommands.length - 1)];
+        if (cmd) handleChange(`/${cmd.name}`);
+      } else if (showFilePopover) {
+        const file = fileResults[Math.min(selectedIndex, fileResults.length - 1)];
+        if (file) selectFile(file);
+      }
     }
   });
 
