@@ -33,12 +33,20 @@ export interface ReportConfig {
   memory_depth: number;
 }
 
+export interface MemoryConfig {
+  enabled: boolean;
+  embedding_model: string;
+  api_key_env: string;
+  db_path: string;
+}
+
 export interface Config {
   llm: LLMConfig;
   github: GitHubConfig;
   jira: JiraConfig;
   slack: SlackConfig;
   report: ReportConfig;
+  memory?: MemoryConfig;
 }
 
 const REPORTER_DIR = join(homedir(), "reporter");
@@ -72,6 +80,11 @@ export function loadConfig(): Config {
       "~",
       homedir()
     );
+  }
+
+  // Resolve ~ in memory.db_path
+  if (parsed.memory?.db_path?.startsWith("~")) {
+    parsed.memory.db_path = parsed.memory.db_path.replace("~", homedir());
   }
 
   return parsed;
@@ -112,6 +125,13 @@ lookback_days = 1
 output_dir = "~/reporter/reports"
 # Number of past reports to include as context for continuity
 memory_depth = 5
+
+# [memory]
+# Semantic memory — uses vector search to find relevant past reports and notes
+# enabled = true
+# embedding_model = "voyage-3.5-lite"
+# api_key_env = "VOYAGE_API_KEY"
+# db_path = "~/reporter/memory.db"
 `;
 
 /**

@@ -1,6 +1,6 @@
 import type { Config } from "../config.js";
 
-export function buildSystemPrompt(config: Config, pastReports: string, extraServerNames: string[] = []): string {
+export function buildSystemPrompt(config: Config, pastReports: string, extraServerNames: string[] = [], usedVectorSearch: boolean = false): string {
   const today = new Date().toISOString().split("T")[0];
   const lookback = config.report.lookback_days;
 
@@ -49,7 +49,7 @@ Blockers, stale PRs (open > 3 days with no review), unanswered questions, approa
 - Tool names are prefixed with the source (e.g. github__*, jira__*, slack__*). Use the right tools for the right source.
 - GitHub searches MUST be scoped to the configured orgs. Never search unrelated public repos.
 
-${extraServerNames.length > 0 ? `## Additional Tools\nYou also have access to tools from these custom MCP servers: ${extraServerNames.join(", ")}. Use their tools (prefixed with <server-name>__*) when relevant.\n\n` : ""}${pastReports ? `## Past Reports (for Decision Trail context)\n\n${pastReports}` : "## Past Reports\nNo previous reports available yet."}`;
+${extraServerNames.length > 0 ? `## Additional Tools\nYou also have access to tools from these custom MCP servers: ${extraServerNames.join(", ")}. Use their tools (prefixed with <server-name>__*) when relevant.\n\n` : ""}${pastReports ? `## Past Reports (for Decision Trail context)${usedVectorSearch ? "\n_Ranked by semantic relevance — scores shown per entry._" : ""}\n\n${pastReports}` : "## Past Reports\nNo previous reports available yet."}`;
 }
 
 export function buildUserMessage(config: Config): string {

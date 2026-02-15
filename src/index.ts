@@ -1,11 +1,13 @@
 #!/usr/bin/env bun
-import { loadConfig, initConfig, configExists, getConfigPath, resolveSecret, updateSlackConfig, type SlackInitConfig } from "./config.js";
+import { loadConfig, initConfig, configExists, getConfigPath, resolveSecret, updateSlackConfig, type SlackInitConfig, type Config } from "./config.js";
 import { getEnabledServers } from "./mcp/registry.js";
 import { MCPClientManager } from "./mcp/client.js";
 import { AnthropicProvider } from "./llm/anthropic.js";
 import { runAgent } from "./llm/agent.js";
 import { buildSystemPrompt, buildUserMessage } from "./report/prompt.js";
-import { loadPastReports, saveReport, listReports } from "./report/memory.js";
+import { loadRelevantReports, saveReport, listReports } from "./report/memory.js";
+import { VectorDB } from "./memory/vectordb.js";
+import { EmbeddingClient } from "./memory/embeddings.js";
 import { loginGitHub, logoutGitHub, loadStoredGitHubToken } from "./auth/github.js";
 import {
   loginAnthropicApiKey,
@@ -54,6 +56,8 @@ async function main() {
       return cmdLogout();
     case "mcp":
       return cmdMcp();
+    case "memory":
+      return cmdMemory();
     case "history":
       return cmdHistory();
     case "schedule":
@@ -392,8 +396,8 @@ async function cmdRun() {
     }
 
     // Build prompt with memory
-    const pastReports = loadPastReports(config);
-    const systemPrompt = buildSystemPrompt(config, pastReports, customServerNames);
+    const { content: pastReports, usedVectorSearch } = await loadRelevantReports(config);
+    const systemPrompt = buildSystemPrompt(config, pastReports, customServerNames, usedVectorSearch);
     const userMessage = buildUserMessage(config);
 
     // Run the agentic loop
@@ -405,7 +409,7 @@ async function cmdRun() {
 
     // Save report
     if (!noSave) {
-      const path = saveReport(config, report);
+      const path = await saveReport(config, report);
       log(`Report saved to ${path}`);
     }
   } finally {
@@ -546,6 +550,192 @@ function cmdMcpList() {
   }
 }
 
+async function cmdMemory() {
+  if (!configExists()) {
+    error(`Config not found. Run "reporter init" first.`);
+    process.exit(1);
+  }
+
+  const config = loadConfig();
+  const subcommand = args[1];
+
+  if (!config.memory?.enabled) {
+    error('Memory is not enabled. Add [memory] section to config and set enabled = true.');
+    process.exit(1);
+  }
+
+  const apiKey = resolveSecret(config.memory.api_key_env);
+  if (!apiKey) {
+    error(`Voyage API key not found. Set ${config.memory.api_key_env} environment variable.`);
+    process.exit(1);
+  }
+
+  const embeddingClient = new EmbeddingClient(apiKey, config.memory.embedding_model);
+  const db = new VectorDB(config.memory.db_path);
+
+  try {
+    switch (subcommand) {
+      case "index":
+        return await cmdMemoryIndex(config, db, embeddingClient);
+      case "add":
+        return await cmdMemoryAdd(config, db, embeddingClient);
+      case "search":
+        return await cmdMemorySearch(db, embeddingClient);
+      case "stats":
+        return cmdMemoryStats(db);
+      case "clear":
+        return cmdMemoryClear(db);
+      case "notes":
+        return cmdMemoryNotes(db);
+      case "forget":
+        return cmdMemoryForget(db);
+      default:
+        console.log(`Usage:
+  reporter memory index              Embed all existing reports into vector DB
+  reporter memory add <text>         Store a note for future context
+  reporter memory search <query>     Search memory (debug tool)
+  reporter memory stats              Show memory statistics
+  reporter memory clear              Wipe all embeddings
+  reporter memory notes              List stored notes
+  reporter memory forget <date>      Remove a specific note by date`);
+        process.exit(1);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+async function cmdMemoryIndex(
+  config: Config,
+  db: VectorDB,
+  client: EmbeddingClient
+) {
+  const { readdirSync, readFileSync } = await import("fs");
+  const { join } = await import("path");
+  const { homedir } = await import("os");
+
+  const dir = config.report.output_dir.replace("~", homedir());
+  const files = readdirSync(dir).filter((f) => f.endsWith(".md")).sort();
+
+  if (files.length === 0) {
+    console.log("No reports found to index.");
+    return;
+  }
+
+  const alreadyEmbedded = db.getEmbeddedDates(config.memory!.embedding_model);
+  const toEmbed = files.filter((f) => !alreadyEmbedded.has(f.replace(".md", "")));
+
+  if (toEmbed.length === 0) {
+    console.log(`All ${files.length} reports already indexed.`);
+    return;
+  }
+
+  log(`Indexing ${toEmbed.length} report(s) (${alreadyEmbedded.size} already indexed)...`);
+
+  const texts = toEmbed.map((f) => readFileSync(join(dir, f), "utf-8"));
+  const embeddings = await client.embedDocuments(texts);
+
+  for (let i = 0; i < toEmbed.length; i++) {
+    const date = toEmbed[i].replace(".md", "");
+    db.upsert("report", date, texts[i], embeddings[i], config.memory!.embedding_model);
+  }
+
+  log(`Indexed ${toEmbed.length} report(s).`);
+}
+
+async function cmdMemoryAdd(
+  config: Config,
+  db: VectorDB,
+  client: EmbeddingClient
+) {
+  const text = args.slice(2).join(" ");
+  if (!text) {
+    error('Missing note text. Usage: reporter memory add "your note here"');
+    process.exit(1);
+  }
+
+  const embedding = await client.embedDocument(text);
+  const date = new Date().toISOString();
+  db.upsert("note", date, text, embedding, config.memory!.embedding_model);
+  log("Note stored.");
+}
+
+async function cmdMemorySearch(
+  db: VectorDB,
+  client: EmbeddingClient
+) {
+  const query = args.slice(2).join(" ");
+  if (!query) {
+    error('Missing query. Usage: reporter memory search "your query"');
+    process.exit(1);
+  }
+
+  const embedding = await client.embedQuery(query);
+  const results = db.query(embedding, 5);
+
+  if (results.length === 0) {
+    console.log("No results found.");
+    return;
+  }
+
+  for (const r of results) {
+    const label = r.type === "note" ? "Note" : "Report";
+    const score = (1 - r.distance).toFixed(3);
+    const preview = r.content.slice(0, 200).replace(/\n/g, " ");
+    console.log(`[${label}] ${r.date} (relevance: ${score})`);
+    console.log(`  ${preview}${r.content.length > 200 ? "..." : ""}\n`);
+  }
+}
+
+function cmdMemoryStats(db: VectorDB) {
+  const stats = db.getStats();
+  console.log(`Memory statistics:`);
+  console.log(`  Reports indexed: ${stats.reports}`);
+  console.log(`  Notes stored:    ${stats.notes}`);
+  console.log(`  Total:           ${stats.reports + stats.notes}`);
+}
+
+function cmdMemoryClear(db: VectorDB) {
+  db.clearAll();
+  log("All embeddings cleared.");
+}
+
+function cmdMemoryNotes(db: VectorDB) {
+  const notes = db.getNotes();
+  if (notes.length === 0) {
+    console.log("No notes stored.");
+    return;
+  }
+
+  console.log("Stored notes:");
+  for (const n of notes) {
+    const dateStr = n.date.split("T")[0];
+    console.log(`  [${dateStr}] ${n.content}`);
+  }
+}
+
+function cmdMemoryForget(db: VectorDB) {
+  const date = args[2];
+  if (!date) {
+    error('Missing date. Usage: reporter memory forget <date>');
+    process.exit(1);
+  }
+
+  // Try to find notes that match — notes use ISO timestamps, so match by prefix
+  const notes = db.getNotes();
+  const matching = notes.filter((n) => n.date.startsWith(date));
+
+  if (matching.length === 0) {
+    error(`No notes found matching "${date}".`);
+    process.exit(1);
+  }
+
+  for (const n of matching) {
+    db.deleteByDate("note", n.date);
+  }
+  log(`Removed ${matching.length} note(s).`);
+}
+
 function cmdHistory() {
   if (!configExists()) {
     error(`Config not found. Run "reporter init" first.`);
@@ -623,6 +813,13 @@ Commands:
   reporter mcp add <name> ...          Add a custom MCP server
   reporter mcp remove <name>           Remove a custom MCP server
   reporter mcp list                    List custom MCP servers
+  reporter memory index                Embed existing reports into vector DB
+  reporter memory add <text>           Store a note for future context
+  reporter memory search <query>       Search memory (debug tool)
+  reporter memory stats                Show memory statistics
+  reporter memory clear                Wipe all embeddings
+  reporter memory notes                List stored notes
+  reporter memory forget <date>        Remove a note by date
   reporter history                     List past reports
   reporter schedule --every "9am"      Show crontab entry for scheduling
   reporter schedule --every "*/15m"    Every N minutes
