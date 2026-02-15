@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { render, Box } from "ink";
 import type { ChatSession } from "../chat/session.js";
 import type { StreamCallbacks, ToolCall } from "../llm/provider.js";
@@ -24,6 +24,19 @@ function App({ session, services, onExit }: AppProps) {
   const [status, setStatus] = useState<AppStatus>("idle");
 
   const activeRef = useRef<DisplayMessage | null>(null);
+  const hadActiveRef = useRef(false);
+
+  useEffect(() => {
+    if (activeMessage) {
+      hadActiveRef.current = true;
+    } else if (hadActiveRef.current) {
+      hadActiveRef.current = false;
+      const timer = setTimeout(() => {
+        process.stdout.write('\x1B[0J');
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [activeMessage]);
 
   const finalizeActive = useCallback(() => {
     if (activeRef.current) {
