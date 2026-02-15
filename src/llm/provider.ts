@@ -40,6 +40,10 @@ export interface StreamCallbacks {
 }
 
 export interface LLMProvider {
+  readonly providerName: string;
+  model: string;
+  setModel(model: string): void;
+
   chat(
     systemPrompt: string,
     messages: Message[],

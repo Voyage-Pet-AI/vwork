@@ -19,6 +19,12 @@ export interface DisplayMessage {
 
 export type AppStatus = "idle" | "streaming" | "tool_running";
 
+export interface ActivityInfo {
+  startTime: number;      // Date.now() when request started
+  outputChars: number;    // characters received (tokens ≈ chars/4)
+  lastToolName?: string;  // friendly name of currently running tool, if any
+}
+
 export interface ConnectedService {
   name: string;
 }

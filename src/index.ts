@@ -3,6 +3,7 @@ import { loadConfig, initConfig, configExists, getConfigPath, resolveSecret, upd
 import { getEnabledServers } from "./mcp/registry.js";
 import { MCPClientManager } from "./mcp/client.js";
 import { AnthropicProvider } from "./llm/anthropic.js";
+import { OpenAIProvider } from "./llm/openai.js";
 import { runAgent } from "./llm/agent.js";
 import { buildSystemPrompt, buildUserMessage, buildScheduleUserMessage } from "./report/prompt.js";
 import { loadRelevantReports, saveReport, listReports } from "./report/memory.js";
@@ -16,6 +17,11 @@ import {
   logoutAnthropic,
   hasAnthropicAuth,
 } from "./auth/anthropic.js";
+import {
+  loginOpenAI,
+  logoutOpenAI,
+  hasOpenAIAuth,
+} from "./auth/openai.js";
 import { getSlackToken } from "./auth/tokens.js";
 import { promptSlackToken } from "./auth/slack.js";
 import {
@@ -35,6 +41,18 @@ import { ChatSession } from "./chat/session.js";
 import { startTUI } from "./tui/app.js";
 import { log, error } from "./utils/log.js";
 import { readLine } from "./utils/readline.js";
+
+import type { LLMProvider } from "./llm/provider.js";
+
+function createProvider(config: Config): LLMProvider {
+  switch (config.llm.provider) {
+    case "openai":
+      return new OpenAIProvider(config);
+    case "anthropic":
+    default:
+      return new AnthropicProvider(config);
+  }
+}
 
 const VERSION = "0.1.2";
 
@@ -86,18 +104,33 @@ async function cmdInit() {
 
   const config = loadConfig();
 
-  // Check Anthropic auth and offer login if needed
-  const anthropicAuth = hasAnthropicAuth();
-  if (anthropicAuth.mode !== "none") {
-    log(`Anthropic: authenticated (${anthropicAuth.mode})`);
-  } else if (!config.llm.api_key_env || !resolveSecret(config.llm.api_key_env)) {
-    process.stderr.write("\nLog in to Anthropic with OAuth? (Y/n) ");
-    const answer = await readLine();
-    if (answer.trim().toLowerCase() !== "n") {
-      await loginAnthropicApiKey();
+  // Check LLM auth and offer login if needed
+  if (config.llm.provider === "openai") {
+    const openaiAuth = hasOpenAIAuth();
+    if (openaiAuth.mode !== "none") {
+      log(`OpenAI: authenticated (${openaiAuth.mode})`);
+    } else if (!config.llm.api_key_env || !resolveSecret(config.llm.api_key_env)) {
+      process.stderr.write("\nLog in to OpenAI with OAuth? (Y/n) ");
+      const answer = await readLine();
+      if (answer.trim().toLowerCase() !== "n") {
+        await loginOpenAI();
+      }
+    } else {
+      log("OpenAI: authenticated (config)");
     }
   } else {
-    log("Anthropic: authenticated (config)");
+    const anthropicAuth = hasAnthropicAuth();
+    if (anthropicAuth.mode !== "none") {
+      log(`Anthropic: authenticated (${anthropicAuth.mode})`);
+    } else if (!config.llm.api_key_env || !resolveSecret(config.llm.api_key_env)) {
+      process.stderr.write("\nLog in to Anthropic with OAuth? (Y/n) ");
+      const answer = await readLine();
+      if (answer.trim().toLowerCase() !== "n") {
+        await loginAnthropicApiKey();
+      }
+    } else {
+      log("Anthropic: authenticated (config)");
+    }
   }
 
   // 2. Determine which builtins are already authenticated
@@ -329,10 +362,13 @@ async function cmdLogin() {
       return loginGitHub();
     case "anthropic":
       return loginAnthropicApiKey();
+    case "openai":
+      return loginOpenAI();
     default:
       console.log(`Usage:
   reporter login github               Authenticate with GitHub via browser OAuth
-  reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)`);
+  reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)
+  reporter login openai                Authenticate with OpenAI via OAuth (ChatGPT Pro/Plus)`);
       process.exit(1);
   }
 }
@@ -344,10 +380,13 @@ async function cmdLogout() {
       return logoutGitHub();
     case "anthropic":
       return logoutAnthropic();
+    case "openai":
+      return logoutOpenAI();
     default:
       console.log(`Usage:
   reporter logout github      Remove stored GitHub token
-  reporter logout anthropic   Remove stored Anthropic tokens`);
+  reporter logout anthropic   Remove stored Anthropic tokens
+  reporter logout openai      Remove stored OpenAI tokens`);
       process.exit(1);
   }
 }
@@ -384,7 +423,7 @@ async function cmdChat() {
       await mcpClient.connect(servers);
     }
 
-    const provider = new AnthropicProvider(config);
+    const provider = createProvider(config);
     const session = new ChatSession(provider, mcpClient, config, customServerNames);
 
     // Build services list for TUI header
@@ -450,7 +489,7 @@ async function cmdRun() {
     const userMessage = buildUserMessage(config);
 
     // Run the agentic loop
-    const provider = new AnthropicProvider(config);
+    const provider = createProvider(config);
     const report = await runAgent(provider, mcpClient, systemPrompt, userMessage);
 
     // Output to stdout
@@ -867,7 +906,7 @@ async function cmdScheduleRun() {
     const systemPrompt = buildSystemPrompt(config, pastReports, customServerNames, usedVectorSearch);
     const userMessage = buildScheduleUserMessage(config, schedule.prompt || undefined);
 
-    const provider = new AnthropicProvider(config);
+    const provider = createProvider(config);
     const report = await runAgent(provider, mcpClient, systemPrompt, userMessage);
 
     // Save with schedule-specific filename
@@ -904,6 +943,8 @@ Commands:
   reporter run --no-save               Don't save report to disk
   reporter login anthropic             Authenticate with Anthropic via OAuth
   reporter logout anthropic            Remove stored Anthropic tokens
+  reporter login openai                Authenticate with OpenAI via OAuth (ChatGPT Pro/Plus)
+  reporter logout openai               Remove stored OpenAI tokens
   reporter login github                Authenticate with GitHub via browser OAuth
   reporter logout github               Remove stored GitHub token
   reporter auth login                  Authenticate with Atlassian (Jira) via browser OAuth
@@ -928,6 +969,7 @@ Options:
 
 Environment:
   ANTHROPIC_API_KEY    Claude API key (optional if using "reporter login anthropic")
+  OPENAI_API_KEY       OpenAI API key (optional if using "reporter login openai")
   GITHUB_TOKEN         GitHub token (optional if using "reporter login github")
   SLACK_BOT_TOKEN      Slack bot token (optional if using "reporter auth slack")
   REPORTER_DEBUG       Set to 1 for debug logging`);

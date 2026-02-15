@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { render, Box } from "ink";
 import type { ChatSession } from "../chat/session.js";
 import type { StreamCallbacks, ToolCall } from "../llm/provider.js";
-import type { DisplayMessage, DisplayToolCall, AppStatus, ConnectedService } from "./types.js";
+import type { DisplayMessage, DisplayToolCall, AppStatus, ConnectedService, ActivityInfo } from "./types.js";
 import { Header } from "./header.js";
 import { CompletedMessages, ActiveMessage, QueuedMessages } from "./messages.js";
 import { ChatInput } from "./input.js";
@@ -15,6 +15,7 @@ interface AppProps {
   session: ChatSession;
   services: ConnectedService[];
   onExit: () => void;
+  clearOutput: () => void;
 }
 
 let msgCounter = 0;
@@ -22,28 +23,17 @@ function nextId(): string {
   return String(++msgCounter);
 }
 
-function App({ session, services, onExit }: AppProps) {
+function App({ session, services, onExit, clearOutput }: AppProps) {
   const [completedMessages, setCompletedMessages] = useState<DisplayMessage[]>([]);
   const [activeMessage, setActiveMessage] = useState<DisplayMessage | null>(null);
   const [status, setStatus] = useState<AppStatus>("idle");
   const [queuedMessages, setQueuedMessages] = useState<DisplayMessage[]>([]);
 
   const activeRef = useRef<DisplayMessage | null>(null);
-  const hadActiveRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const interceptorRef = useRef<((text: string) => void) | null>(null);
-
-  useEffect(() => {
-    if (activeMessage) {
-      hadActiveRef.current = true;
-    } else if (hadActiveRef.current) {
-      hadActiveRef.current = false;
-      const timer = setTimeout(() => {
-        process.stdout.write('\x1B[0J');
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [activeMessage]);
+  const activityRef = useRef<ActivityInfo | null>(null);
+  const [activityInfo, setActivityInfo] = useState<ActivityInfo | null>(null);
 
   const finalizeActive = useCallback(() => {
     if (activeRef.current) {
@@ -51,13 +41,17 @@ function App({ session, services, onExit }: AppProps) {
       for (const tc of activeRef.current.toolCalls) {
         if (tc.status === "running") tc.status = "done";
       }
+      // Reset Ink's internal line counter before shrinking the dynamic area
+      clearOutput();
       setCompletedMessages((prev) => [...prev, activeRef.current!]);
       activeRef.current = null;
       setActiveMessage(null);
     }
     abortRef.current = null;
+    activityRef.current = null;
+    setActivityInfo(null);
     setStatus("idle");
-  }, []);
+  }, [clearOutput]);
 
   const processMessage = useCallback(async (text: string) => {
     const controller = new AbortController();
@@ -72,6 +66,8 @@ function App({ session, services, onExit }: AppProps) {
     };
     activeRef.current = assistantMsg;
     setActiveMessage({ ...assistantMsg });
+    activityRef.current = { startTime: Date.now(), outputChars: 0 };
+    setActivityInfo({ ...activityRef.current });
     setStatus("streaming");
 
     const callbacks: StreamCallbacks = {
@@ -79,6 +75,10 @@ function App({ session, services, onExit }: AppProps) {
         if (activeRef.current) {
           activeRef.current.content += delta;
           setActiveMessage({ ...activeRef.current });
+        }
+        if (activityRef.current) {
+          activityRef.current.outputChars += delta.length;
+          setActivityInfo({ ...activityRef.current });
         }
       },
       onToolStart: (tc: ToolCall) => {
@@ -94,6 +94,10 @@ function App({ session, services, onExit }: AppProps) {
           activeRef.current.toolCalls.push(displayTc);
           setActiveMessage({ ...activeRef.current });
         }
+        if (activityRef.current) {
+          activityRef.current.lastToolName = friendlyToolName(tc.name);
+          setActivityInfo({ ...activityRef.current });
+        }
       },
       onToolEnd: (tc: ToolCall, result: string, isError?: boolean) => {
         if (activeRef.current) {
@@ -104,6 +108,10 @@ function App({ session, services, onExit }: AppProps) {
           }
           setActiveMessage({ ...activeRef.current });
           setStatus("streaming");
+        }
+        if (activityRef.current) {
+          activityRef.current.lastToolName = undefined;
+          setActivityInfo({ ...activityRef.current });
         }
       },
       onComplete: () => {
@@ -212,6 +220,8 @@ function App({ session, services, onExit }: AppProps) {
     setQueuedMessages([]);
     activeRef.current = null;
     abortRef.current = null;
+    activityRef.current = null;
+    setActivityInfo(null);
     setStatus("idle");
   }, [session]);
 
@@ -245,7 +255,7 @@ function App({ session, services, onExit }: AppProps) {
     const helpMsg: DisplayMessage = {
       id: nextId(),
       role: "assistant",
-      content: "Commands:\n  /help       Show this help\n  /schedule   Manage scheduled reports\n  /copy       Copy last response to clipboard\n  /clear      Clear conversation history\n  /exit       Exit chat",
+      content: "Commands:\n  /help       Show this help\n  /model      Switch LLM model\n  /schedule   Manage scheduled reports\n  /copy       Copy last response to clipboard\n  /clear      Clear conversation history\n  /exit       Exit chat",
       toolCalls: [],
     };
     setCompletedMessages((prev) => [...prev, helpMsg]);
@@ -388,6 +398,32 @@ function App({ session, services, onExit }: AppProps) {
     addSystemMessage("Unknown subcommand. Usage: `/schedule`, `/schedule add`, `/schedule list`, `/schedule remove <name>`");
   }, [addSystemMessage, waitForInput]);
 
+  const handleModel = useCallback(async () => {
+    const currentModel = session.getModel();
+    const providerName = session.getProviderName();
+
+    const suggestions: string[] = providerName === "openai"
+      ? ["gpt-4o", "gpt-4o-mini", "o3-mini"]
+      : ["claude-sonnet-4-5-20250929", "claude-opus-4-5-20250514", "claude-haiku-3-5-20241022"];
+
+    const lines = suggestions.map((s, i) => `  \`${i + 1}\` — ${s}`);
+    addSystemMessage(
+      `Current model: **${currentModel}** (${providerName})\n\nPick a model or type a custom name:\n${lines.join("\n")}`
+    );
+
+    const input = await waitForInput();
+    const num = parseInt(input, 10);
+    const chosen = num >= 1 && num <= suggestions.length ? suggestions[num - 1] : input;
+
+    if (!chosen) {
+      addSystemMessage("No model selected.");
+      return;
+    }
+
+    session.setModel(chosen);
+    addSystemMessage(`Model switched to **${chosen}**.`);
+  }, [session, addSystemMessage, waitForInput]);
+
   return (
     <Box flexDirection="column">
       {completedMessages.length === 0 && !activeMessage && <Header services={services} />}
@@ -396,6 +432,7 @@ function App({ session, services, onExit }: AppProps) {
       <QueuedMessages messages={queuedMessages} />
       <ChatInput
         status={status}
+        activityInfo={activityInfo}
         onSubmit={handleSend}
         onAbort={abort}
         onExit={onExit}
@@ -403,6 +440,7 @@ function App({ session, services, onExit }: AppProps) {
         onHelp={handleHelp}
         onCopy={handleCopy}
         onSchedule={handleSchedule}
+        onModel={handleModel}
       />
     </Box>
   );
@@ -415,6 +453,8 @@ interface StartTUIOptions {
 
 export async function startTUI(options: StartTUIOptions): Promise<void> {
   return new Promise<void>((resolve) => {
+    const clearRef = { current: () => {} };
+
     const handleExit = () => {
       inkInstance.unmount();
       resolve();
@@ -425,9 +465,11 @@ export async function startTUI(options: StartTUIOptions): Promise<void> {
         session={options.session}
         services={options.services}
         onExit={handleExit}
+        clearOutput={() => clearRef.current()}
       />,
       { exitOnCtrlC: false }
     );
 
+    clearRef.current = () => inkInstance.clear();
   });
 }

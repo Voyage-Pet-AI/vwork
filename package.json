@@ -20,6 +20,7 @@
     "ink-text-input": "^6.0.0",
     "marked": "17",
     "marked-terminal": "^7.3.0",
+    "openai": "^6.22.0",
     "picocolors": "^1.1.1",
     "react": "^18.3.1",
     "smol-toml": "^1.6.0",

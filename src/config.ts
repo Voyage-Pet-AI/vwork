@@ -5,7 +5,7 @@ import { homedir } from "os";
 import { loadStoredGitHubToken } from "./auth/github.js";
 
 export interface LLMConfig {
-  provider: "anthropic";
+  provider: "anthropic" | "openai";
   model: string;
   api_key_env?: string;
 }
@@ -96,6 +96,12 @@ model = "claude-sonnet-4-5-20250929"
 # Auth: run "reporter login anthropic" for browser-based OAuth (recommended)
 # Or set an API key — env var name like "ANTHROPIC_API_KEY" or the key directly
 # api_key_env = "ANTHROPIC_API_KEY"
+#
+# To use OpenAI instead:
+# provider = "openai"
+# model = "gpt-4o"
+# Auth: run "reporter login openai" for ChatGPT Pro/Plus OAuth (free via Codex)
+# Or set: api_key_env = "OPENAI_API_KEY"
 
 [github]
 enabled = true

@@ -37,6 +37,18 @@ export class ChatSession {
     this.messages = [];
   }
 
+  getModel(): string {
+    return this.provider.model;
+  }
+
+  setModel(model: string): void {
+    this.provider.setModel(model);
+  }
+
+  getProviderName(): string {
+    return this.provider.providerName;
+  }
+
   /** Send a user message and stream the response. Handles tool call loops internally. */
   async send(userMessage: string, callbacks: StreamCallbacks, signal?: AbortSignal): Promise<void> {
     this.messages.push({ role: "user", content: userMessage });

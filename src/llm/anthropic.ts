@@ -19,8 +19,9 @@ import {
 type AuthMode = "oauth" | "key" | "config";
 
 export class AnthropicProvider implements LLMProvider {
+  readonly providerName = "anthropic";
   private client: Anthropic;
-  private model: string;
+  model: string;
   private authMode: AuthMode;
 
   constructor(config: Config) {
@@ -60,6 +61,10 @@ export class AnthropicProvider implements LLMProvider {
       `  Run "reporter login anthropic" for browser-based OAuth (recommended)\n` +
       `  Or set api_key_env in config / ANTHROPIC_API_KEY env var`
     );
+  }
+
+  setModel(model: string): void {
+    this.model = model;
   }
 
   private async ensureFreshToken(): Promise<void> {

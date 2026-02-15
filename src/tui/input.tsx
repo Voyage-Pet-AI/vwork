@@ -2,11 +2,35 @@ import { useState, useRef, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
 import { MultiLineInput } from "./multiline-input.js";
 import Spinner from "ink-spinner";
-import type { AppStatus } from "./types.js";
+import type { AppStatus, ActivityInfo } from "./types.js";
 import { useFileSearch } from "./use-file-search.js";
+
+function formatElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return `${m}m ${s % 60}s`;
+}
+
+function formatTokens(chars: number): string {
+  const t = Math.round(chars / 4);
+  return t >= 1000 ? `${(t / 1000).toFixed(1)}k` : String(t);
+}
+
+function useElapsed(startTime: number | null): string {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (startTime === null) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [startTime]);
+  if (startTime === null) return "0m 0s";
+  return formatElapsed(now - startTime);
+}
 
 const SLASH_COMMANDS = [
   { name: "help", description: "Show this help" },
+  { name: "model", description: "Switch LLM model" },
   { name: "schedule", description: "Manage scheduled reports" },
   { name: "copy", description: "Copy last response to clipboard" },
   { name: "clear", description: "Clear conversation history" },
@@ -17,6 +41,7 @@ type SlashCommand = (typeof SLASH_COMMANDS)[number];
 
 interface ChatInputProps {
   status: AppStatus;
+  activityInfo?: ActivityInfo | null;
   onSubmit: (text: string) => void;
   onAbort: () => void;
   onExit: () => void;
@@ -24,14 +49,16 @@ interface ChatInputProps {
   onHelp: () => void;
   onCopy: () => void;
   onSchedule: (subcommand: string) => void;
+  onModel: () => void;
 }
 
-export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule }: ChatInputProps) {
+export function ChatInput({ status, activityInfo, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [ctrlCPending, setCtrlCPending] = useState(false);
   const ctrlCTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isBusy = status !== "idle";
+  const elapsed = useElapsed(activityInfo?.startTime ?? null);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -63,6 +90,7 @@ export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp, 
     setValue("");
     switch (cmd.name) {
       case "help": onHelp(); return;
+      case "model": onModel(); return;
       case "schedule": onSchedule(""); return;
       case "copy": onCopy(); return;
       case "clear": onClear(); return;
@@ -184,6 +212,9 @@ export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp, 
       case "/copy":
         onCopy();
         return;
+      case "/model":
+        onModel();
+        return;
       case "/schedule": {
         const rest = trimmed.slice("/schedule".length).trim();
         onSchedule(rest);
@@ -253,6 +284,17 @@ export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp, 
         </Box>
       ) : ctrlCPending ? (
         <Text color="yellow">{"  Press Ctrl+C again to exit"}</Text>
+      ) : isBusy && activityInfo ? (
+        <Text dimColor>
+          {"  "}<Text color="cyan"><Spinner type="dots" /></Text>
+          {" "}
+          {activityInfo.lastToolName ? `Running ${activityInfo.lastToolName}` : "Streaming"}
+          {"… ("}
+          {elapsed}
+          {" · ↓ "}
+          {formatTokens(activityInfo.outputChars)}
+          {" tokens)    Enter to abort"}
+        </Text>
       ) : (
         <Text dimColor>{hint}</Text>
       )}
