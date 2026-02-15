@@ -44,11 +44,7 @@ import {
   logoutAnthropic,
   startAnthropicLogin,
 } from "../auth/anthropic.js";
-import {
-  hasOpenAIAuth,
-  loginOpenAI,
-  logoutOpenAI,
-} from "../auth/openai.js";
+import { hasOpenAIAuth, loginOpenAI, logoutOpenAI } from "../auth/openai.js";
 import { createProvider } from "../index.js";
 import type { Config } from "../config.js";
 
@@ -72,6 +68,14 @@ function appendText(msg: DisplayMessage, delta: string) {
   } else {
     msg.blocks.push({ type: "text", text: delta });
   }
+}
+
+function hasRenderableAssistantBlocks(msg: DisplayMessage): boolean {
+  return msg.blocks.some(
+    (block) =>
+      block.type === "tool_call" ||
+      (block.type === "text" && block.text.length > 0),
+  );
 }
 
 type ProviderName = "anthropic" | "openai";
@@ -127,7 +131,10 @@ function App({ session, config, services, onExit }: AppProps) {
   const interceptorRef = useRef<((text: string) => void) | null>(null);
   const activityRef = useRef<ActivityInfo | null>(null);
   const [activityInfo, setActivityInfo] = useState<ActivityInfo | null>(null);
-  const availability = getProviderAvailability(config, session.getProviderName());
+  const availability = getProviderAvailability(
+    config,
+    session.getProviderName(),
+  );
 
   const finalizeActive = useCallback(() => {
     if (activeRef.current) {
@@ -137,7 +144,9 @@ function App({ session, config, services, onExit }: AppProps) {
           block.toolCall.status = "done";
         }
       }
-      setCompletedMessages((prev) => [...prev, activeRef.current!]);
+      if (hasRenderableAssistantBlocks(activeRef.current)) {
+        setCompletedMessages((prev) => [...prev, activeRef.current!]);
+      }
       activeRef.current = null;
       setActiveMessage(null);
     }
@@ -323,8 +332,6 @@ function App({ session, config, services, onExit }: AppProps) {
   }, [status, queuedMessages, processMessage]);
 
   const handleClear = useCallback(() => {
-    // Clear terminal screen + scrollback so <Static> output is removed
-    process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
     session.clear();
     setCompletedMessages([]);
     setActiveMessage(null);
@@ -492,7 +499,9 @@ function App({ session, config, services, onExit }: AppProps) {
         if (action === "relogin" || action === "reauth") {
           try {
             logoutOpenAI();
-            addSystemMessage("Previous OpenAI auth removed. Re-authenticating...");
+            addSystemMessage(
+              "Previous OpenAI auth removed. Re-authenticating...",
+            );
             await loginOpenAI();
             addSystemMessage("OpenAI re-login successful!");
           } catch (err) {
@@ -507,7 +516,9 @@ function App({ session, config, services, onExit }: AppProps) {
       }
 
       if (action === "status") {
-        addSystemMessage(`Anthropic auth mode: ${hasAnthropicAuth(config).mode}`);
+        addSystemMessage(
+          `Anthropic auth mode: ${hasAnthropicAuth(config).mode}`,
+        );
         return;
       }
       if (action === "logout") {
@@ -528,7 +539,9 @@ function App({ session, config, services, onExit }: AppProps) {
       if (action === "relogin" || action === "reauth") {
         try {
           logoutAnthropic();
-          addSystemMessage("Previous Anthropic auth removed. Re-authenticating...");
+          addSystemMessage(
+            "Previous Anthropic auth removed. Re-authenticating...",
+          );
           await runAnthropicLogin();
         } catch (err) {
           addSystemMessage(
@@ -695,7 +708,9 @@ function App({ session, config, services, onExit }: AppProps) {
   const handleModel = useCallback(
     (model: string, provider: string) => {
       if (!availability.usableProviders.includes(provider as ProviderName)) {
-        addSystemMessage(`Provider **${provider}** is not currently usable for chat.`);
+        addSystemMessage(
+          `Provider **${provider}** is not currently usable for chat.`,
+        );
         return;
       }
 
@@ -711,8 +726,6 @@ function App({ session, config, services, onExit }: AppProps) {
         };
         const newProvider = createProvider(modifiedConfig);
         session.setProvider(newProvider);
-
-        process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
         setCompletedMessages([]);
         setActiveMessage(null);
         setQueuedMessages([]);
@@ -736,7 +749,9 @@ function App({ session, config, services, onExit }: AppProps) {
   const switchProvider = useCallback(
     (providerName: string) => {
       const defaultModel =
-        providerName === "openai" ? "gpt-5.2-codex" : "claude-sonnet-4-5-20250929";
+        providerName === "openai"
+          ? "gpt-5.2-codex"
+          : "claude-sonnet-4-5-20250929";
       const modifiedConfig: Config = {
         ...config,
         llm: {
@@ -747,9 +762,6 @@ function App({ session, config, services, onExit }: AppProps) {
       };
       const newProvider = createProvider(modifiedConfig);
       session.setProvider(newProvider);
-
-      // Clear TUI display state (same as handleClear)
-      process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
       setCompletedMessages([]);
       setActiveMessage(null);
       setQueuedMessages([]);
@@ -775,8 +787,12 @@ function App({ session, config, services, onExit }: AppProps) {
         return;
       }
 
-      if (!availability.usableProviders.includes(providerName as ProviderName)) {
-        addSystemMessage(`Provider **${providerName}** is not currently usable for chat.`);
+      if (
+        !availability.usableProviders.includes(providerName as ProviderName)
+      ) {
+        addSystemMessage(
+          `Provider **${providerName}** is not currently usable for chat.`,
+        );
         return;
       }
 
@@ -812,7 +828,14 @@ function App({ session, config, services, onExit }: AppProps) {
 
       switchProvider(providerName);
     },
-    [session, config, addSystemMessage, switchProvider, availability, runAnthropicLogin],
+    [
+      session,
+      config,
+      addSystemMessage,
+      switchProvider,
+      availability,
+      runAnthropicLogin,
+    ],
   );
 
   return (

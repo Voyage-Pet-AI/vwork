@@ -53,6 +53,7 @@ const MODELS: Record<string, { id: string; label: string }[]> = {
     { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
   ],
   openai: [
+    { id: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
     { id: "gpt-5.2-codex", label: "GPT-5.2 Codex" },
     { id: "gpt-5.2", label: "GPT-5.2" },
     { id: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini" },

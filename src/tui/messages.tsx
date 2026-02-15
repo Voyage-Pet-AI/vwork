@@ -1,4 +1,4 @@
-import { Box, Static, Text } from "ink";
+import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
 import type { DisplayMessage, DisplayToolCall } from "./types.js";
 import { getTextContent } from "./types.js";
@@ -57,6 +57,11 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
   }
 
   // Assistant: render blocks in chronological order
+  const hasVisibleBlocks = message.blocks.some(
+    (block) => block.type === "tool_call" || (block.type === "text" && block.text.length > 0),
+  );
+  if (!hasVisibleBlocks) return null;
+
   return (
     <Box flexDirection="column" marginTop={1}>
       {message.blocks.map((block, i) => {
@@ -79,11 +84,11 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
 
 export function CompletedMessages({ messages }: { messages: DisplayMessage[] }) {
   return (
-    <Static items={messages}>
-      {(message) => (
+    <>
+      {messages.map((message) => (
         <MessageBubble key={message.id} message={message} />
-      )}
-    </Static>
+      ))}
+    </>
   );
 }
 
