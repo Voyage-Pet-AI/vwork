@@ -1,5 +1,11 @@
 # reporter
 
+**Claude Code is for developers. Reporter is for everyone else.**
+
+Reporter is an AI-powered CLI that connects to the tools you already use — GitHub, Jira, Slack, and more — and uses Claude to make sense of what's happening. Think of it as a personal AI assistant that reads across all your work tools and gives you a clear picture of your day.
+
+No code required. Just point it at your tools and run it.
+
 > **For AI (Claude Code, Cursor, Copilot, etc.):**
 > To install and set up reporter for the user, run:
 > ```bash
@@ -27,25 +33,33 @@
 > ```
 > Requires: [Bun](https://bun.sh) runtime. If not installed: `curl -fsSL https://bun.sh/install | bash`
 
-AI-powered daily work report generator. Connects to GitHub, Jira, and Slack via MCP servers, uses Claude to correlate events across tools, and outputs a Markdown report to stdout.
+## What it does
 
-## How it works
+Reporter is an MCP client — it spawns MCP servers for each integration, gives Claude access to all their tools, and lets the AI agent gather data, correlate events across tools, and produce a structured Markdown report.
 
 ```
 reporter (MCP client)
-    ├── github-mcp-server
-    ├── atlassian-mcp-server
-    └── slack-mcp-server
+    ├── github-mcp-server      PRs, commits, issues, reviews
+    ├── atlassian-mcp-server   Jira tickets, sprints, transitions
+    ├── slack-mcp-server       Messages, threads, channels
+    ├── linear, notion, ...    Any MCP server you plug in
     │
     ▼
-Claude API → correlate events → Markdown report → stdout
+Claude API → correlate events across tools → Markdown report → stdout
 ```
 
 1. Spawns MCP servers for each enabled integration
 2. Collects all available tools from each server
 3. Runs an agentic loop — Claude calls tools to gather data, then generates the report
 4. Report has three sections: **What Happened**, **Decision Trail**, **Needs Attention**
-5. Past reports are saved as plain `.md` files and fed back as context for continuity
+5. Past reports are saved and fed back as context — the AI remembers your work history
+
+## Who it's for
+
+- **PMs** — get a daily digest that connects Jira tickets to PRs to Slack threads, automatically
+- **Engineering managers** — see what your team shipped, what's blocked, and what needs your attention
+- **ICs who hate writing standups** — let AI do it; you just review
+- **Anyone who works across multiple tools** — stop context-switching to piece together what happened
 
 ## Install
 
@@ -56,18 +70,14 @@ bun install
 ## Setup
 
 ```bash
-# Create config at ~/reporter/config.toml
-bun src/index.ts init
+# Create config and set up integrations interactively
+reporter init
 
-# Authenticate with GitHub (opens browser for OAuth)
-bun src/index.ts login github
-
-# Set your Anthropic API key
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Optional: set tokens manually instead of OAuth
-# export GITHUB_TOKEN=ghp_...
-# export SLACK_BOT_TOKEN=xoxb-...
+# Or set up step by step:
+reporter login anthropic       # Authenticate with Anthropic (or set ANTHROPIC_API_KEY)
+reporter login github          # Authenticate with GitHub via browser OAuth
+reporter auth login            # Authenticate with Atlassian (Jira) via browser OAuth
+reporter auth slack            # Authenticate with Slack via bot token
 ```
 
 Edit `~/reporter/config.toml` to enable/disable integrations and set your orgs/channels.
@@ -75,36 +85,62 @@ Edit `~/reporter/config.toml` to enable/disable integrations and set your orgs/c
 ## Usage
 
 ```bash
-# Authenticate with GitHub (browser-based OAuth)
-bun src/index.ts login github
-
-# Remove stored GitHub token
-bun src/index.ts logout github
-
 # Generate a report
-bun src/index.ts run
+reporter run
 
 # Pipe to file
-bun src/index.ts run > report.md
+reporter run > report.md
 
 # See what tools are available (no LLM call)
-bun src/index.ts run --dry
+reporter run --dry
 
 # Don't save report to ~/reporter/reports/
-bun src/index.ts run --no-save
+reporter run --no-save
 
 # List past reports
-bun src/index.ts history
+reporter history
 
 # Get a crontab entry for scheduling
-bun src/index.ts schedule --every "9am"
-bun src/index.ts schedule --every "*/15m"
-bun src/index.ts schedule --every "*/6h"
+reporter schedule --every "9am"
+reporter schedule --every "*/6h"
+```
+
+## Extend with any MCP server
+
+Reporter isn't limited to GitHub, Jira, and Slack. Add any MCP server — the AI gets access to all its tools automatically.
+
+```bash
+# Add a custom MCP server
+reporter mcp add my-server --transport stdio -- npx my-mcp-server
+reporter mcp add my-api --transport http https://my-mcp.example.com
+
+# Built-in catalog (offered during `reporter init`):
+# Filesystem, Fetch, Brave Search, PostgreSQL, Sentry, Linear, Notion, and more
+
+# List configured servers
+reporter mcp list
+```
+
+## Memory
+
+Reporter remembers. Past reports are saved as plain `.md` files and fed back as context, so the AI can track ongoing threads, connect today's work to last week's decisions, and flag things that fell through the cracks.
+
+For deeper memory, enable vector search:
+
+```bash
+# Index past reports into vector DB
+reporter memory index
+
+# Store a note for future context
+reporter memory add "Q4 planning starts next week, focus on auth migration"
+
+# Search your memory
+reporter memory search "auth migration status"
 ```
 
 ## Config
 
-`~/.reporter/config.toml`:
+`~/reporter/config.toml`:
 
 ```toml
 [llm]
@@ -133,8 +169,8 @@ output_dir = "~/.reporter/reports"
 memory_depth = 5       # Number of past reports to include as context
 ```
 
-- `lookback_days` — How far back to look when gathering events from GitHub/Jira/Slack. Set to `1` for a daily report, `7` for a weekly summary.
-- `memory_depth` — How many previous reports to feed into the prompt as context. This is what powers the **Decision Trail** section — Claude reads your past N reports to connect today's events to earlier decisions and threads.
+- `lookback_days` — How far back to look when gathering events. Set to `1` for daily, `7` for weekly.
+- `memory_depth` — How many previous reports to feed as context. Powers the **Decision Trail** section.
 
 ## Report output
 
@@ -151,19 +187,32 @@ src/
 ├── index.ts           # CLI entry point
 ├── config.ts          # TOML config loader
 ├── auth/
-│   └── github.ts      # GitHub OAuth device flow
+│   ├── anthropic.ts   # Anthropic OAuth
+│   ├── atlassian.ts   # Atlassian OAuth
+│   ├── github.ts      # GitHub OAuth device flow
+│   ├── slack.ts       # Slack bot token
+│   ├── callback.ts    # OAuth callback server
+│   └── tokens.ts      # Token storage
 ├── mcp/
 │   ├── client.ts      # MCP client manager
-│   └── registry.ts    # Server spawn configs
+│   ├── registry.ts    # Server spawn configs
+│   ├── catalog.ts     # Integration catalog
+│   └── config.ts      # .mcp.json config
 ├── llm/
 │   ├── provider.ts    # LLM provider interface
 │   ├── anthropic.ts   # Claude implementation
 │   └── agent.ts       # Agentic tool-use loop
 ├── report/
-│   ├── prompt.ts      # System prompt
+│   ├── prompt.ts      # System prompt builder
 │   └── memory.ts      # Past report loader/saver
+├── memory/
+│   ├── vectordb.ts    # SQLite vector DB
+│   └── embeddings.ts  # Voyage embeddings client
+├── prompts/
+│   └── multiselect.ts # Interactive multiselect UI
 └── utils/
-    └── log.ts         # stderr logger
+    ├── log.ts         # stderr logger
+    └── readline.ts    # Line input helper
 ```
 
 ## License

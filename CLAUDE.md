@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Reporter is an AI-powered CLI that generates daily work reports. It acts as an MCP client, spawning MCP servers for GitHub, Jira, and Slack, then uses Claude's agentic tool-use loop to gather data and produce a Markdown report to stdout.
+Reporter is "Claude Code for everyone else" — an AI-powered CLI for PMs, managers, and anyone who works with computers but doesn't write code. It connects to the tools people already use (GitHub, Jira, Slack, Linear, Notion, etc.) via MCP servers, then uses Claude's agentic tool-use loop to gather data, correlate events across tools, and produce a structured Markdown report to stdout. The long-term vision is a general-purpose AI assistant for non-developers, starting with work reporting as the entry point.
 
 ## Commands
 
@@ -20,7 +20,7 @@ There are no tests or linters configured.
 
 ## Architecture
 
-**Runtime:** Bun (native TypeScript execution, no compile step for dev). Only 3 production deps: Anthropic SDK, MCP SDK, smol-toml.
+**Runtime:** Bun (native TypeScript execution, no compile step for dev). Production deps: Anthropic SDK, MCP SDK, smol-toml, picocolors, sqlite-vec.
 
 **Core flow** (`src/index.ts` → `cmdRun`):
 1. Load TOML config from `~/reporter/config.toml`
@@ -37,5 +37,8 @@ There are no tests or linters configured.
 - Custom MCP servers can be added via `reporter mcp add` and are stored in `.mcp.json`
 - Auth tokens are stored in `~/reporter/auth/` (GitHub OAuth, Atlassian tokens, Slack tokens)
 - Secret resolution (`config.ts:resolveSecret`) treats ALL_CAPS values as env var names, otherwise as literal values
+- `src/mcp/catalog.ts` defines the built-in integration catalog (shown during `reporter init`): GitHub, Jira, Slack, Filesystem, Fetch, Brave Search, PostgreSQL, Sentry, Linear, Notion
+- `src/memory/` provides optional vector search over past reports via sqlite-vec + Voyage embeddings
+- `src/prompts/multiselect.ts` is a custom interactive multiselect UI for `reporter init`
 
 **Release process:** `scripts/publish.sh` bumps version, tags, and pushes. The `release.yml` GitHub Action builds, creates a tarball, publishes a GitHub Release, and dispatches a tap update to `riricardoMa/homebrew-tap`.
