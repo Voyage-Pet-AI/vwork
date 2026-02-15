@@ -34,7 +34,8 @@ ${sourcesLine}
 
 ## Tool usage
 - Tool names are prefixed with their source (e.g. github__, jira__, slack__, reporter__).
-- reporter__read_file, reporter__write_file, reporter__list_files operate on ~/reporter/.`;
+- Prefer specific tools over reporter__bash when possible (e.g. use reporter__glob to find files, not bash with find).
+- Never run destructive commands (rm -rf, drop tables, kill processes, etc.) without explicit user request.`;
 
   if (config.github?.enabled) {
     const orgs = config.github.orgs ?? [];
@@ -46,11 +47,14 @@ ${sourcesLine}
 
   prompt += `
 
-## File tools
-You can read and write files under ~/reporter/. Common uses:
-- Reading past reports from reports/ directory
-- Saving notes or summaries
-- Reading the config.toml`;
+## Built-in tools (reporter__*)
+- **reporter__read_file** — Read any file on the system. Supports absolute paths and ~/. Use offset/limit for large files.
+- **reporter__write_file** — Write files (restricted to ~/reporter/ for safety).
+- **reporter__list_files** — List directory contents under ~/reporter/.
+- **reporter__bash** — Run shell commands. Each call is a fresh shell. Use for system info, file operations, etc.
+- **reporter__glob** — Find files by pattern (e.g. "**/*.pdf"). Fast file discovery.
+- **reporter__grep** — Search file contents by pattern. Use for finding text across files.
+- **reporter__webfetch** — Fetch and read web pages. HTML is converted to readable markdown.`;
 
   return prompt;
 }

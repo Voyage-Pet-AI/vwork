@@ -2,7 +2,7 @@ import type { LLMProvider, Message, LLMTool, StreamCallbacks } from "../llm/prov
 import type { MCPClientManager } from "../mcp/client.js";
 import type { Config } from "../config.js";
 import { filterTools } from "../llm/agent.js";
-import { getFileTools, executeFileTool } from "./tools.js";
+import { getBuiltinTools, executeBuiltinTool } from "./tools/index.js";
 import { buildChatSystemPrompt } from "./prompt.js";
 import { error, debug } from "../utils/log.js";
 
@@ -26,8 +26,8 @@ export class ChatSession {
 
     // Combine MCP tools (filtered) + built-in file tools
     const mcpTools = filterTools(mcpClient.getAllTools());
-    const fileTools = getFileTools();
-    this.tools = [...mcpTools, ...fileTools];
+    const builtinTools = getBuiltinTools();
+    this.tools = [...mcpTools, ...builtinTools];
 
     this.systemPrompt = buildChatSystemPrompt(config, customServerNames);
   }
@@ -98,7 +98,7 @@ export class ChatSession {
           try {
             let result: string;
             if (tc.name.startsWith("reporter__")) {
-              result = await executeFileTool(tc);
+              result = await executeBuiltinTool(tc, signal);
             } else {
               const raw = await this.mcpClient.callTool(tc.name, tc.input);
               result = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);

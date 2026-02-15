@@ -178,6 +178,8 @@ function App({ session, services, onExit }: AppProps) {
   }, [status, queuedMessages, processMessage]);
 
   const handleClear = useCallback(() => {
+    // Clear terminal screen + scrollback so <Static> output is removed
+    process.stdout.write('\x1B[2J\x1B[3J\x1B[H');
     session.clear();
     setCompletedMessages([]);
     setActiveMessage(null);
@@ -199,7 +201,7 @@ function App({ session, services, onExit }: AppProps) {
 
   return (
     <Box flexDirection="column">
-      <Header services={services} />
+      {completedMessages.length === 0 && !activeMessage && <Header services={services} />}
       <CompletedMessages messages={completedMessages} />
       <ActiveMessage message={activeMessage} />
       <QueuedMessages messages={queuedMessages} />

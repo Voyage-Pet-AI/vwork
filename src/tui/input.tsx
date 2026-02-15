@@ -120,7 +120,16 @@ export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp }
 
   return (
     <Box flexDirection="column">
-      {showPopover && (
+      <Box borderStyle="round" paddingLeft={1} paddingRight={1}>
+        <Text color="cyan" bold>{"❯ "}</Text>
+        <TextInput
+          value={value}
+          onChange={handleChange}
+          onSubmit={handleSubmit}
+          placeholder={placeholder}
+        />
+      </Box>
+      {showPopover ? (
         <Box flexDirection="column" paddingLeft={2}>
           {filteredCommands.map((cmd, i) => (
             <Text key={cmd.name}>
@@ -136,17 +145,9 @@ export function ChatInput({ status, onSubmit, onAbort, onExit, onClear, onHelp }
             </Text>
           ))}
         </Box>
+      ) : (
+        <Text dimColor>{hint}</Text>
       )}
-      <Box borderStyle="round" paddingLeft={1} paddingRight={1}>
-        <Text color="cyan" bold>{"❯ "}</Text>
-        <TextInput
-          value={value}
-          onChange={handleChange}
-          onSubmit={handleSubmit}
-          placeholder={placeholder}
-        />
-      </Box>
-      <Text dimColor>{hint}</Text>
     </Box>
   );
 }
