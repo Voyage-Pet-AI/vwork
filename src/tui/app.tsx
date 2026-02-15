@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { render, Box } from "ink";
 import type { ChatSession } from "../chat/session.js";
 import type { StreamCallbacks, ToolCall } from "../llm/provider.js";
@@ -81,6 +81,14 @@ function App({ session, config, services, onExit }: AppProps) {
   const interceptorRef = useRef<((text: string) => void) | null>(null);
   const activityRef = useRef<ActivityInfo | null>(null);
   const [activityInfo, setActivityInfo] = useState<ActivityInfo | null>(null);
+
+  const authedProviders = useMemo(() => {
+    const providers: string[] = [];
+    if (hasAnthropicAuth().mode !== "none") providers.push("anthropic");
+    if (hasOpenAIAuth().mode !== "none") providers.push("openai");
+    if (providers.length === 0) providers.push(session.getProviderName());
+    return providers;
+  }, []);
 
   const finalizeActive = useCallback(() => {
     if (activeRef.current) {
@@ -500,10 +508,41 @@ function App({ session, config, services, onExit }: AppProps) {
     [addSystemMessage, waitForInput, processMessage],
   );
 
-  const handleModel = useCallback((model: string) => {
-    session.setModel(model);
-    addSystemMessage(`Model switched to **${model}**.`);
-  }, [session, addSystemMessage]);
+  const handleModel = useCallback(
+    (model: string, provider: string) => {
+      if (provider !== session.getProviderName()) {
+        // Switch provider first, then override the default model
+        const modifiedConfig: Config = {
+          ...config,
+          llm: {
+            ...config.llm,
+            provider: provider as "anthropic" | "openai",
+            model,
+          },
+        };
+        const newProvider = createProvider(modifiedConfig);
+        session.setProvider(newProvider);
+
+        process.stdout.write("\x1B[2J\x1B[3J\x1B[H");
+        setCompletedMessages([]);
+        setActiveMessage(null);
+        setQueuedMessages([]);
+        activeRef.current = null;
+        abortRef.current = null;
+        activityRef.current = null;
+        setActivityInfo(null);
+        setStatus("idle");
+
+        addSystemMessage(
+          `Switched to **${provider}** with model **${model}**. Conversation cleared.`,
+        );
+      } else {
+        session.setModel(model);
+        addSystemMessage(`Model switched to **${model}**.`);
+      }
+    },
+    [session, config, addSystemMessage],
+  );
 
   const switchProvider = useCallback(
     (providerName: string) => {
@@ -511,7 +550,11 @@ function App({ session, config, services, onExit }: AppProps) {
         providerName === "openai" ? "gpt-4.1" : "claude-sonnet-4-5-20250929";
       const modifiedConfig: Config = {
         ...config,
-        llm: { ...config.llm, provider: providerName, model: defaultModel },
+        llm: {
+          ...config.llm,
+          provider: providerName as "anthropic" | "openai",
+          model: defaultModel,
+        },
       };
       const newProvider = createProvider(modifiedConfig);
       session.setProvider(newProvider);
@@ -549,8 +592,15 @@ function App({ session, config, services, onExit }: AppProps) {
         if (auth.mode === "none") {
           try {
             const handle = await startAnthropicLogin();
-            const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-            Bun.spawn([opener, handle.authUrl], { stdio: ["ignore", "ignore", "ignore"] });
+            const opener =
+              process.platform === "darwin"
+                ? "open"
+                : process.platform === "win32"
+                  ? "start"
+                  : "xdg-open";
+            Bun.spawn([opener, handle.authUrl], {
+              stdio: ["ignore", "ignore", "ignore"],
+            });
             addSystemMessage(
               `Opening browser for Anthropic authorization...\n\nIf the browser didn't open, visit:\n  ${handle.authUrl}\n\nPaste the authorization code below:`,
             );
@@ -562,7 +612,9 @@ function App({ session, config, services, onExit }: AppProps) {
             await handle.complete(code);
             addSystemMessage("Anthropic login successful!");
           } catch (err) {
-            addSystemMessage(`Anthropic login failed: ${err instanceof Error ? err.message : String(err)}`);
+            addSystemMessage(
+              `Anthropic login failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
             return;
           }
         }
@@ -574,7 +626,9 @@ function App({ session, config, services, onExit }: AppProps) {
             await loginOpenAI();
             addSystemMessage("OpenAI login successful!");
           } catch (err) {
-            addSystemMessage(`OpenAI login failed: ${err instanceof Error ? err.message : String(err)}`);
+            addSystemMessage(
+              `OpenAI login failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
             return;
           }
         }
@@ -607,6 +661,7 @@ function App({ session, config, services, onExit }: AppProps) {
         onSchedule={handleSchedule}
         onModel={handleModel}
         onConnect={handleConnect}
+        authedProviders={authedProviders}
       />
     </Box>
   );

@@ -70,11 +70,12 @@ interface ChatInputProps {
   onHelp: () => void;
   onCopy: () => void;
   onSchedule: (subcommand: string) => void;
-  onModel: (model: string) => void;
+  onModel: (model: string, provider: string) => void;
+  authedProviders: string[];
   onConnect: (provider: string) => void | Promise<void>;
 }
 
-export function ChatInput({ status, activityInfo, currentProvider, currentModel, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel, onConnect }: ChatInputProps) {
+export function ChatInput({ status, activityInfo, currentProvider, currentModel, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onSchedule, onModel, onConnect, authedProviders }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [ctrlCPending, setCtrlCPending] = useState(false);
@@ -177,7 +178,9 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
 
     if (!showPopover) return;
 
-    const modelItems = MODELS[currentProvider] ?? [];
+    const modelItems = authedProviders.flatMap(p =>
+      (MODELS[p] ?? []).map(m => ({ ...m, provider: p }))
+    );
     const itemCount = connectPopover
       ? PROVIDERS.length
       : modelPopover
@@ -202,7 +205,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
         const model = modelItems[Math.min(selectedIndex, modelItems.length - 1)];
         if (model) {
           setModelPopover(false);
-          onModel(model.id);
+          onModel(model.id, model.provider);
         }
       } else if (showSlashPopover) {
         const cmd = filteredCommands[Math.min(selectedIndex, filteredCommands.length - 1)];
@@ -246,12 +249,14 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
 
     // If model popover is showing, select the highlighted model
     if (modelPopover) {
-      const modelItems = MODELS[currentProvider] ?? [];
+      const modelItems = authedProviders.flatMap(p =>
+        (MODELS[p] ?? []).map(m => ({ ...m, provider: p }))
+      );
       const model = modelItems[Math.min(selectedIndex, modelItems.length - 1)];
       if (model) {
         setModelPopover(false);
         setValue("");
-        onModel(model.id);
+        onModel(model.id, model.provider);
       }
       return;
     }
@@ -357,19 +362,42 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
         </Box>
       ) : modelPopover ? (
         <Box flexDirection="column" paddingLeft={2}>
-          {(MODELS[currentProvider] ?? []).map((m, i) => (
-            <Text key={m.id}>
-              {i === selectedIndex ? (
-                <Text color="cyan" bold>{"❯ "}</Text>
-              ) : (
-                <Text>{"  "}</Text>
-              )}
-              <Text color={i === selectedIndex ? "cyan" : undefined} bold={i === selectedIndex}>
-                {m.label}
-              </Text>
-              {m.id === currentModel && <Text dimColor>{"  (current)"}</Text>}
-            </Text>
-          ))}
+          {(() => {
+            const items = authedProviders.flatMap(p =>
+              (MODELS[p] ?? []).map(m => ({ ...m, provider: p }))
+            );
+            const multiProvider = authedProviders.length > 1;
+            let lastProvider = "";
+            let idx = 0;
+            return items.map(m => {
+              const rows: React.ReactNode[] = [];
+              if (multiProvider && m.provider !== lastProvider) {
+                const providerLabel = PROVIDERS.find(p => p.name === m.provider)?.label ?? m.provider;
+                rows.push(
+                  <Text key={`hdr-${m.provider}`} dimColor bold>
+                    {lastProvider === "" ? "" : "\n"}{providerLabel}
+                  </Text>
+                );
+                lastProvider = m.provider;
+              }
+              const i = idx++;
+              rows.push(
+                <Text key={m.id}>
+                  {i === selectedIndex ? (
+                    <Text color="cyan" bold>{"❯ "}</Text>
+                  ) : (
+                    <Text>{"  "}</Text>
+                  )}
+                  <Text color={i === selectedIndex ? "cyan" : undefined} bold={i === selectedIndex}>
+                    {m.label}
+                  </Text>
+                  {multiProvider && <Text dimColor>{"  "}{PROVIDERS.find(p => p.name === m.provider)?.label ?? m.provider}</Text>}
+                  {m.id === currentModel && m.provider === currentProvider && <Text dimColor>{"  (current)"}</Text>}
+                </Text>
+              );
+              return rows;
+            });
+          })()}
         </Box>
       ) : showSlashPopover ? (
         <Box flexDirection="column" paddingLeft={2}>
