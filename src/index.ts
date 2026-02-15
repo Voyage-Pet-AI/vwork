@@ -30,7 +30,7 @@ import { loadMCPConfig, saveMCPConfig, mcpConfigToServers, getMCPConfigPath, typ
 import { MCP_CATALOG, type CatalogEntry } from "./mcp/catalog.js";
 import { multiselect, cancelSymbol, type MultiselectItem } from "./prompts/multiselect.js";
 import { ChatSession } from "./chat/session.js";
-import { runChatLoop } from "./chat/loop.js";
+import { startTUI } from "./tui/app.js";
 import { log, error } from "./utils/log.js";
 import { readLine } from "./utils/readline.js";
 
@@ -384,7 +384,10 @@ async function cmdChat() {
 
     const provider = new AnthropicProvider(config);
     const session = new ChatSession(provider, mcpClient, config, customServerNames);
-    await runChatLoop(session);
+
+    // Build services list for TUI header
+    const services = servers.map((s) => ({ name: s.name.charAt(0).toUpperCase() + s.name.slice(1) }));
+    await startTUI({ session, services });
   } finally {
     await mcpClient.disconnect();
   }
