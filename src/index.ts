@@ -520,6 +520,15 @@ async function cmdRun() {
     if (result.saveError) {
       error(`Report generated but failed to save: ${result.saveError}`);
     }
+
+    const kind = config.report.lookback_days >= 7 ? "weekly" : "daily";
+    if (result.savedPath) {
+      await sendNotification("VWork", `${kind} report`, `Report generated: ${result.savedPath}`);
+    } else if (result.saveError) {
+      await sendNotification("VWork", `${kind} report warning`, `Generated but failed to save: ${result.saveError}`);
+    } else {
+      await sendNotification("VWork", `${kind} report`, "Report generated successfully.");
+    }
   } finally {
     await mcpClient.disconnect();
   }

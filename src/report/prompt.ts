@@ -1,7 +1,9 @@
 import type { Config } from "../config.js";
 
 export function buildSystemPrompt(config: Config, pastReports: string, extraServerNames: string[] = [], usedVectorSearch: boolean = false): string {
-  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
+  const localTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' });
   const lookback = config.report.lookback_days;
 
   const enabledSources: string[] = [];
@@ -9,7 +11,7 @@ export function buildSystemPrompt(config: Config, pastReports: string, extraServ
   if (config.jira.enabled) enabledSources.push("Jira");
   if (config.slack.enabled) enabledSources.push("Slack");
 
-  return `You are a work report generator. Today is ${today}.
+  return `You are a work report generator. Today is ${today}, current local time is ${localTime}.
 
 Your job: generate a concise daily work report by gathering data from ${enabledSources.join(", ")}.
 
@@ -62,10 +64,12 @@ export function buildUserMessage(config: Config): string {
 }
 
 export function buildScheduleUserMessage(config: Config, customPrompt?: string): string {
-  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
+  const localTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' });
   const lookback = config.report.lookback_days;
   if (customPrompt) {
-    return `${customPrompt}\n\nLook back ${lookback} day(s). Today is ${today}.`;
+    return `${customPrompt}\n\nLook back ${lookback} day(s). Today is ${today}, current local time is ${localTime}.`;
   }
   return buildUserMessage(config);
 }
