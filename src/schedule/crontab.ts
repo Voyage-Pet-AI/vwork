@@ -3,7 +3,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { CronExpressionParser } from "cron-parser";
 
-const TAG_PREFIX = "# reporter:";
+const TAG_PREFIX = "# vwork:";
 
 function tag(name: string): string {
   return `${TAG_PREFIX}${name}`;
@@ -36,7 +36,7 @@ async function writeCrontab(content: string): Promise<boolean> {
 function buildCronLine(name: string, cronExpr: string): string {
   const bunPath = process.execPath;
   const entryPoint = process.argv[1];
-  const logPath = join(homedir(), "reporter", `schedule-${name}.log`);
+  const logPath = join(homedir(), "vwork", `schedule-${name}.log`);
   // Prepend PATH so bun and other tools are available in cron environment
   const pathDirs = ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"].join(":");
   return `${cronExpr} PATH=${pathDirs}:$PATH ${bunPath} ${entryPoint} schedule run ${name} >> ${logPath} 2>&1 ${tag(name)}`;

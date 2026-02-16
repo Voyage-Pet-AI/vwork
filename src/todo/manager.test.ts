@@ -33,7 +33,7 @@ function buildConfig(notebookDir: string): Config {
 }
 
 beforeEach(() => {
-  testRoot = mkdtempSync(join(tmpdir(), "reporter-todo-manager-test-"));
+  testRoot = mkdtempSync(join(tmpdir(), "vwork-todo-manager-test-"));
 });
 
 afterEach(() => {

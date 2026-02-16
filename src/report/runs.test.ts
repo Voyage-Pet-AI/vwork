@@ -8,7 +8,7 @@ let testHome = "";
 
 beforeEach(() => {
   oldHome = process.env.HOME ?? "";
-  testHome = mkdtempSync(join(tmpdir(), "reporter-runs-test-"));
+  testHome = mkdtempSync(join(tmpdir(), "vwork-runs-test-"));
   process.env.HOME = testHome;
 });
 

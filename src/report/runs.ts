@@ -39,10 +39,10 @@ interface ReportRunStore {
   events: ReportRunEvent[];
 }
 
-const STORE_PATH = join(homedir(), "reporter", "report-runs.json");
+const STORE_PATH = join(homedir(), "vwork", "report-runs.json");
 
 function ensureDir(): void {
-  mkdirSync(join(homedir(), "reporter"), { recursive: true });
+  mkdirSync(join(homedir(), "vwork"), { recursive: true });
 }
 
 function loadStore(): ReportRunStore {
@@ -90,8 +90,8 @@ export function startRun(input: Omit<ReportRun, "status" | "startedAt" | "runId"
     timestamp: now,
     message:
       input.source === "schedule" && input.scheduleName
-        ? `Reporter executing report "${input.scheduleName}".`
-        : `Reporter executing ${input.kind} report.`,
+        ? `VWork executing report "${input.scheduleName}".`
+        : `VWork executing ${input.kind} report.`,
     unread: input.source === "schedule",
   });
   saveStore(store);
@@ -143,8 +143,8 @@ export function finishRunSuccess(runId: string, result: ReportResult): void {
     timestamp: run.endedAt,
     message:
       run.source === "schedule" && run.scheduleName
-        ? `Here is reporter's report for "${run.scheduleName}": ${result.savedPath ?? "(not saved)"}.`
-        : `Reporter completed ${run.kind} report.`,
+        ? `Here is VWork's report for "${run.scheduleName}": ${result.savedPath ?? "(not saved)"}.`
+        : `VWork completed ${run.kind} report.`,
     savedPath: result.savedPath,
     error: result.saveError,
     unread: run.source === "schedule",
@@ -169,7 +169,7 @@ export function finishRunFailure(runId: string, err: string): void {
     scheduleName: run.scheduleName,
     type: "failed",
     timestamp: run.endedAt,
-    message: `Reporter failed: ${err}`,
+    message: `VWork failed: ${err}`,
     error: err,
     unread: run.source === "schedule",
   });

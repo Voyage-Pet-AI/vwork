@@ -7,7 +7,7 @@ const TIMEOUT = 30_000;
 
 export const grepTools: LLMTool[] = [
   {
-    name: "reporter__grep",
+    name: "vwork__grep",
     description:
       "Search file contents for a pattern using grep. Returns matching lines with file paths and line numbers.",
     input_schema: {

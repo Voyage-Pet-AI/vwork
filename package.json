@@ -1,10 +1,10 @@
 {
-  "name": "reporter",
+  "name": "vwork",
   "version": "0.1.2",
-  "description": "AI-powered daily work report generator",
+  "description": "VWork — AI-powered work assistant for everyone",
   "type": "module",
   "bin": {
-    "reporter": "src/index.ts"
+    "vwork": "src/index.ts"
   },
   "scripts": {
     "start": "bun src/index.ts",

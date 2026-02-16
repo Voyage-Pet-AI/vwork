@@ -86,7 +86,7 @@ export class OpenAIProvider implements LLMProvider {
 
     throw new Error(
       `No OpenAI auth configured.\n` +
-      `  Run "reporter login openai" for ChatGPT Pro/Plus OAuth (recommended)\n` +
+      `  Run "vwork login openai" for ChatGPT Pro/Plus OAuth (recommended)\n` +
       `  Or set api_key_env in config / OPENAI_API_KEY env var`
     );
   }
@@ -509,7 +509,7 @@ export class OpenAIProvider implements LLMProvider {
       }
     }
 
-    // Map OpenAI finish_reason to Reporter's stop_reason
+    // Map OpenAI finish_reason to VWork's stop_reason
     const finishReason = choice?.finish_reason;
     let stopReason: string;
     if (finishReason === "tool_calls") {
@@ -560,7 +560,7 @@ export class OpenAIProvider implements LLMProvider {
     return {
       supported: false,
       reason:
-        `OpenAI computer-use execution is not yet enabled in Reporter for model "${this.model}".`,
+        `OpenAI computer-use execution is not yet enabled in VWork for model "${this.model}".`,
     };
   }
 

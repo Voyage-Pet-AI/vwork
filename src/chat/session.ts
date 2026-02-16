@@ -3,7 +3,7 @@ import type { MCPClientManager } from "../mcp/client.js";
 import type { Config } from "../config.js";
 import { filterTools } from "../llm/agent.js";
 import { getBuiltinTools, executeBuiltinTool } from "./tools/index.js";
-import { executeReporterGenerateReportTool } from "./tools/reporter-generate-report.js";
+import { executeVworkGenerateReportTool } from "./tools/vwork-generate-report.js";
 import { buildChatSystemPrompt } from "./prompt.js";
 import { error, debug } from "../utils/log.js";
 import type { ReportKind, ReportResult } from "../report/types.js";
@@ -103,7 +103,7 @@ export class ChatSession {
       schedule_name?: string;
     }
   ): Promise<ReportResult> {
-    const raw = await executeReporterGenerateReportTool(input, {
+    const raw = await executeVworkGenerateReportTool(input, {
       provider: this.provider,
       mcpClient: this.mcpClient,
       config: this.config,
@@ -224,7 +224,7 @@ export class ChatSession {
           callbacks.onToolStart(tc);
           try {
             let result: string;
-            if (tc.name.startsWith("reporter__")) {
+            if (tc.name.startsWith("vwork__")) {
               result = await executeBuiltinTool(tc, signal, {
                 provider: this.provider,
                 mcpClient: this.mcpClient,

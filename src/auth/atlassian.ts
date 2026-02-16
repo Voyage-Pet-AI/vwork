@@ -7,7 +7,7 @@ import {
   chmodSync,
 } from "fs";
 import { join } from "path";
-import { getReporterDir } from "../config.js";
+import { getVworkDir } from "../config.js";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
   OAuthClientMetadata,
@@ -16,7 +16,7 @@ import type {
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 
 const CALLBACK_PORT = 32191;
-const AUTH_DIR = () => join(getReporterDir(), "auth");
+const AUTH_DIR = () => join(getVworkDir(), "auth");
 const TOKENS_FILE = () => join(AUTH_DIR(), "atlassian-tokens.json");
 const CLIENT_FILE = () => join(AUTH_DIR(), "atlassian-client.json");
 const VERIFIER_FILE = () => join(AUTH_DIR(), "atlassian-verifier.txt");
@@ -32,7 +32,7 @@ export class AtlassianOAuthProvider implements OAuthClientProvider {
 
   get clientMetadata(): OAuthClientMetadata {
     return {
-      client_name: "reporter-cli",
+      client_name: "vwork-cli",
       redirect_uris: [this.redirectUrl],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],

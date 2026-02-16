@@ -62,11 +62,11 @@ const baseConfig: Config = {
   github: { enabled: false, orgs: [] },
   jira: { enabled: false, url: "https://example.com" },
   slack: { enabled: false, channels: [] },
-  report: { lookback_days: 1, output_dir: "~/reporter/reports", memory_depth: 5 },
+  report: { lookback_days: 1, output_dir: "~/vwork/reports", memory_depth: 5 },
   chat: { report_postprocess_enabled: false, report_inbox_replay_limit: 20 },
   todo: {
     enabled: true,
-    notebook_dir: "~/reporter/notebook",
+    notebook_dir: "~/vwork/notebook",
     default_mode: "minimal",
     carryover_prompt: true,
   },
@@ -80,10 +80,10 @@ const baseConfig: Config = {
   },
 };
 
-describe("reporter__computer tool", () => {
+describe("vwork__computer tool", () => {
   test("validates required task input", async () => {
     const result = await executeComputerTool(
-      { id: "1", name: "reporter__computer", input: {} },
+      { id: "1", name: "vwork__computer", input: {} },
       undefined,
       { provider: new MockProvider(), config: baseConfig }
     );
@@ -96,7 +96,7 @@ describe("reporter__computer tool", () => {
     const result = await executeComputerTool(
       {
         id: "1",
-        name: "reporter__computer",
+        name: "vwork__computer",
         input: { task: "setup slack", max_steps: 9999 },
       },
       undefined,
@@ -118,7 +118,7 @@ describe("reporter__computer tool", () => {
     const result = await executeComputerTool(
       {
         id: "1",
-        name: "reporter__computer",
+        name: "vwork__computer",
         input: { task: "click connect button", start_url: "https://slack.com" },
       },
       undefined,

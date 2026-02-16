@@ -55,7 +55,7 @@ export async function runReportSubagent(
       : `Generate my ${request.kind} work report. Look back ${request.lookbackDays} day(s).`;
 
     const content = await runAgent(options.provider, options.mcpClient, systemPrompt, userMessage);
-    appendRunEvent(runId, "generated", "Reporter generated report content.");
+    appendRunEvent(runId, "generated", "VWork generated report content.");
 
     let savedPath: string | undefined;
     let saveError: string | undefined;

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, unlinkSync, existsSync, chmodSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
-import { getReporterDir, resolveSecret, type Config } from "../config.js";
+import { getVworkDir, resolveSecret, type Config } from "../config.js";
 import { log, error } from "../utils/log.js";
 
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -14,7 +14,7 @@ const DEVICE_LOGIN_URL = `${ISSUER}/codex/device`;
 const CALLBACK_PORT = 1455;
 const REDIRECT_URI = `http://localhost:${CALLBACK_PORT}/auth/callback`;
 
-const OAUTH_FILE = () => join(getReporterDir(), "auth", "openai-oauth.json");
+const OAUTH_FILE = () => join(getVworkDir(), "auth", "openai-oauth.json");
 
 // --- PKCE ---
 
@@ -97,7 +97,7 @@ async function loginBrowser(): Promise<StoredOpenAIOAuth> {
   authUrl.searchParams.set("code_challenge_method", "S256");
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("id_token_add_organizations", "true");
-  authUrl.searchParams.set("originator", "reporter");
+  authUrl.searchParams.set("originator", "vwork");
   authUrl.searchParams.set("codex_cli_simplified_flow", "true");
 
   // Wait for callback via local server
@@ -143,7 +143,7 @@ async function loginBrowser(): Promise<StoredOpenAIOAuth> {
         server.stop();
         resolve(code);
         return new Response(
-          "<html><body><h2>Authenticated!</h2><p>You can close this tab and return to Reporter.</p></body></html>",
+          "<html><body><h2>Authenticated!</h2><p>You can close this tab and return to VWork.</p></body></html>",
           { headers: { "Content-Type": "text/html" } }
         );
       },
@@ -362,7 +362,7 @@ export async function refreshOpenAIToken(): Promise<StoredOpenAIOAuth | undefine
   });
 
   if (!tokenRes.ok) {
-    error(`Token refresh failed (${tokenRes.status}). Run "reporter login openai" again.`);
+    error(`Token refresh failed (${tokenRes.status}). Run "vwork login openai" again.`);
     return undefined;
   }
 

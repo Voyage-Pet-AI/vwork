@@ -4,16 +4,16 @@ import type { MCPClientManager } from "../../mcp/client.js";
 import { runReportSubagent } from "../../report/runner.js";
 import type { ReportKind, ReportRequest } from "../../report/types.js";
 
-export interface ReporterGenerateReportContext {
+export interface VworkGenerateReportContext {
   provider: LLMProvider;
   mcpClient: MCPClientManager;
   config: Config;
   customServerNames: string[];
 }
 
-export const reporterGenerateReportTools: LLMTool[] = [
+export const vworkGenerateReportTools: LLMTool[] = [
   {
-    name: "reporter__generate_report",
+    name: "vwork__generate_report",
     description:
       "Generate a work report using the report subagent. Returns report content and save result.",
     input_schema: {
@@ -71,9 +71,9 @@ function normalizeSource(input: unknown): "chat" | "cli" | "schedule" {
   return "chat";
 }
 
-export async function executeReporterGenerateReportTool(
+export async function executeVworkGenerateReportTool(
   input: RawInput,
-  ctx: ReporterGenerateReportContext
+  ctx: VworkGenerateReportContext
 ): Promise<string> {
   const kind = normalizeKind(input.kind);
   const lookback = Number.isFinite(input.lookback_days as number)

@@ -1,4 +1,4 @@
-# Reporter — Design Document
+# VWork — Design Document
 
 A local CLI that auto-generates daily work reports. It connects to Jira, Slack, and GitHub via MCP servers, uses an LLM to correlate events across tools, and outputs Markdown to stdout.
 
@@ -6,7 +6,7 @@ A local CLI that auto-generates daily work reports. It connects to Jira, Slack, 
 
 ```
 ┌─────────────────┐
-│    reporter      │  TypeScript CLI (MCP Client)
+│    vwork         │  TypeScript CLI (MCP Client)
 └────────┬────────┘
          │ spawns MCP servers via stdio
          ├──── github-mcp-server         (GitHub official)
@@ -49,8 +49,8 @@ Each generated report contains three sections:
 | Runtime | Bun | Native TS execution, no build step needed, fast |
 | MCP SDK | `@modelcontextprotocol/sdk` 1.26 | Official, stable |
 | LLM SDK | `@anthropic-ai/sdk` 0.74 | BYOK, start with Claude |
-| Config | TOML (`~/.reporter/config.toml`) | Human-readable |
-| Memory | Plain `.md` files in `~/.reporter/reports/` | No database |
+| Config | TOML (`~/.vwork/config.toml`) | Human-readable |
+| Memory | Plain `.md` files in `~/.vwork/reports/` | No database |
 | Scheduling | System cron / launchd | No reinventing the wheel |
 
 **Production dependencies: 3** — Anthropic SDK, MCP SDK, TOML parser. No build step for dev.
@@ -58,7 +58,7 @@ Each generated report contains three sections:
 ## Project Structure
 
 ```
-reporter/
+vwork/
 ├── src/
 │   ├── index.ts          # Entry point, CLI arg routing
 │   ├── config.ts         # Load/validate TOML config
@@ -76,12 +76,12 @@ reporter/
 │       └── log.ts        # stderr logger (stdout reserved for report)
 ├── package.json
 ├── tsconfig.json
-└── .reporter.example.toml
+└── .vwork.example.toml
 ```
 
 ## Config File
 
-Located at `~/.reporter/config.toml`:
+Located at `~/.vwork/config.toml`:
 
 ```toml
 [llm]
@@ -105,21 +105,21 @@ channels = ["#engineering", "#standup"]
 
 [report]
 lookback_days = 1
-output_dir = "~/.reporter/reports"
+output_dir = "~/.vwork/reports"
 memory_depth = 5
 ```
 
 ## CLI Interface
 
 ```bash
-reporter init                  # Generate config file interactively
-reporter run                   # Generate report to stdout
-reporter run > report.md       # Pipe to file
-reporter run --dry             # Show discovered tools, skip LLM call
-reporter history               # List past saved reports
-reporter schedule --every "9am"    # Write crontab/launchd entry
-reporter schedule --every "*/15m"  # Every 15 minutes
-reporter schedule --every "*/6h"   # Every 6 hours
+vwork init                  # Generate config file interactively
+vwork run                   # Generate report to stdout
+vwork run > report.md       # Pipe to file
+vwork run --dry             # Show discovered tools, skip LLM call
+vwork history               # List past saved reports
+vwork schedule --every "9am"    # Write crontab/launchd entry
+vwork schedule --every "*/15m"  # Every 15 minutes
+vwork schedule --every "*/6h"   # Every 6 hours
 ```
 
 ## Key Components
@@ -146,7 +146,7 @@ Standard tool-use loop:
 
 ### Memory Chain (`src/report/memory.ts`)
 
-- After each run, optionally save the report to `~/.reporter/reports/YYYY-MM-DD.md`
+- After each run, optionally save the report to `~/.vwork/reports/YYYY-MM-DD.md`
 - On next run, load the last N reports (configured by `memory_depth`)
 - Injected as context so Claude can build the "Decision Trail" section
 - Plain files. Searchable with grep. No database.
@@ -164,7 +164,7 @@ Instructs Claude to:
 
 ### Phase 1: Skeleton + GitHub
 
-- `reporter init` and `reporter run`
+- `vwork init` and `vwork run`
 - MCP client connects to GitHub server only
 - Agentic loop working end-to-end
 - Markdown output to stdout
@@ -177,15 +177,15 @@ Instructs Claude to:
 
 ### Phase 3: Memory
 
-- Save reports to `~/.reporter/reports/`
+- Save reports to `~/.vwork/reports/`
 - Load past reports as context
-- `reporter history` command
+- `vwork history` command
 - Decision Trail section
 
 ### Phase 4: Scheduling + Polish
 
-- `reporter schedule` writes crontab/launchd entry
-- `reporter run --dry` for debugging
+- `vwork schedule` writes crontab/launchd entry
+- `vwork run --dry` for debugging
 - Graceful degradation when a server is unreachable
 - BYOK provider interface for future OpenAI support
 
@@ -193,7 +193,7 @@ Instructs Claude to:
 
 | Phase | Test |
 |-------|------|
-| 1 | `ANTHROPIC_API_KEY=xxx GITHUB_TOKEN=xxx reporter run` outputs GitHub activity report |
+| 1 | `ANTHROPIC_API_KEY=xxx GITHUB_TOKEN=xxx vwork run` outputs GitHub activity report |
 | 2 | Jira ticket IDs in GitHub PRs appear linked in report |
 | 3 | Second-day report references decisions from first-day report |
-| 4 | `reporter schedule --every "9am"` creates valid crontab entry |
+| 4 | `vwork schedule --every "9am"` creates valid crontab entry |

@@ -24,22 +24,22 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p staging
-          cp dist/index.js staging/reporter.js
+          cp dist/index.js staging/vwork.js
           cp package.json README.md staging/
-          tar -czf "reporter-${VERSION}.tar.gz" -C staging .
+          tar -czf "vwork-${VERSION}.tar.gz" -C staging .
 
       - name: Compute SHA256
         id: sha
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          SHA=$(shasum -a 256 "reporter-${VERSION}.tar.gz" | awk '{print $1}')
+          SHA=$(shasum -a 256 "vwork-${VERSION}.tar.gz" | awk '{print $1}')
           echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: reporter-*.tar.gz
+          files: vwork-*.tar.gz
           generate_release_notes: true
 
       - name: Dispatch tap update

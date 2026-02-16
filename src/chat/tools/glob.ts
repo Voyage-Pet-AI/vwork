@@ -5,7 +5,7 @@ import type { LLMTool, ToolCall } from "../../llm/provider.js";
 
 export const globTools: LLMTool[] = [
   {
-    name: "reporter__glob",
+    name: "vwork__glob",
     description:
       "Find files matching a glob pattern. Returns absolute paths sorted by modification time (newest first). " +
       'Supports patterns like "**/*.pdf", "*.txt", "src/**/*.ts".',

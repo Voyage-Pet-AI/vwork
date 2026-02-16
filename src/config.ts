@@ -73,11 +73,11 @@ export interface Config {
   memory?: MemoryConfig;
 }
 
-const REPORTER_DIR = join(homedir(), "reporter");
-const CONFIG_PATH = join(REPORTER_DIR, "config.toml");
+const VWORK_DIR = join(homedir(), "vwork");
+const CONFIG_PATH = join(VWORK_DIR, "config.toml");
 
-export function getReporterDir(): string {
-  return REPORTER_DIR;
+export function getVworkDir(): string {
+  return VWORK_DIR;
 }
 
 export function getConfigPath(): string {
@@ -91,7 +91,7 @@ export function configExists(): boolean {
 export function loadConfig(): Config {
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(
-      `Config not found at ${CONFIG_PATH}. Run "reporter init" first.`
+      `Config not found at ${CONFIG_PATH}. Run "vwork init" first.`
     );
   }
 
@@ -114,7 +114,7 @@ export function loadConfig(): Config {
   if (!parsed.todo) {
     parsed.todo = {
       enabled: true,
-      notebook_dir: join(REPORTER_DIR, "notebook"),
+      notebook_dir: join(VWORK_DIR, "notebook"),
       default_mode: "minimal",
       carryover_prompt: true,
     };
@@ -124,7 +124,7 @@ export function loadConfig(): Config {
       parsed.todo.default_mode === "full" ? "full" : "minimal";
     parsed.todo.carryover_prompt = parsed.todo.carryover_prompt !== false;
     if (!parsed.todo.notebook_dir) {
-      parsed.todo.notebook_dir = join(REPORTER_DIR, "notebook");
+      parsed.todo.notebook_dir = join(VWORK_DIR, "notebook");
     }
   }
 
@@ -177,19 +177,19 @@ export function loadConfig(): Config {
 const DEFAULT_CONFIG = `[llm]
 provider = "anthropic"
 model = "claude-sonnet-4-5-20250929"
-# Auth: run "reporter login anthropic" for browser-based OAuth (recommended)
+# Auth: run "vwork login anthropic" for browser-based OAuth (recommended)
 # Or set an API key — env var name like "ANTHROPIC_API_KEY" or the key directly
 # api_key_env = "ANTHROPIC_API_KEY"
 #
 # To use OpenAI instead:
 # provider = "openai"
 # model = "gpt-4o"
-# Auth: run "reporter login openai" for ChatGPT Pro/Plus OAuth (free via Codex)
+# Auth: run "vwork login openai" for ChatGPT Pro/Plus OAuth (free via Codex)
 # Or set: api_key_env = "OPENAI_API_KEY"
 
 [github]
 enabled = true
-# Auth: run "reporter login github" for browser-based OAuth (recommended)
+# Auth: run "vwork login github" for browser-based OAuth (recommended)
 # Or set a token manually — env var name like "GITHUB_TOKEN" or the token directly
 # token_env = "GITHUB_TOKEN"
 # GitHub orgs to pull activity from, e.g. ["my-company", "my-oss-org"]
@@ -197,12 +197,12 @@ orgs = []
 
 [jira]
 enabled = false
-# Run "reporter auth login" before enabling
+# Run "vwork auth login" before enabling
 url = "https://mcp.atlassian.com/v1/mcp"
 
 [slack]
 enabled = false
-# Auth: run "reporter auth slack" to paste your Bot User OAuth Token (recommended)
+# Auth: run "vwork auth slack" to paste your Bot User OAuth Token (recommended)
 # Or set a token manually — env var name like "SLACK_BOT_TOKEN" or the token directly
 # token_env = "SLACK_BOT_TOKEN"
 # Slack channels to read messages from, e.g. ["#engineering", "#standup"]
@@ -212,7 +212,7 @@ channels = []
 # How many days back to look for activity (1 = daily, 7 = weekly)
 lookback_days = 1
 # Where to save generated reports
-output_dir = "~/reporter/reports"
+output_dir = "~/vwork/reports"
 # Number of past reports to include as context for continuity
 memory_depth = 5
 
@@ -226,7 +226,7 @@ report_inbox_replay_limit = 20
 # Enable persistent notebook-based todos in chat/TUI
 enabled = true
 # Daily notebook path pattern: <notebook_dir>/YYYY-MM-DD.md
-notebook_dir = "~/reporter/notebook"
+notebook_dir = "~/vwork/notebook"
 # "minimal" keeps collapsed status badges; "full" opens todo panel by default
 default_mode = "minimal"
 # Prompt to carry over yesterday's open todos if today starts empty
@@ -250,7 +250,7 @@ block_domains = []
 # enabled = true
 # embedding_model = "voyage-3.5-lite"
 # api_key_env = "VOYAGE_API_KEY"
-# db_path = "~/reporter/memory.db"
+# db_path = "~/vwork/memory.db"
 `;
 
 /**
@@ -266,7 +266,7 @@ export function resolveSecret(value: string): string | undefined {
 
 /**
  * Resolve GitHub token with precedence:
- * 1. OAuth stored token (from `reporter login github`)
+ * 1. OAuth stored token (from `vwork login github`)
  * 2. token_env (env var name or literal token from config)
  * 3. undefined
  */
@@ -286,10 +286,10 @@ export interface SlackInitConfig {
 }
 
 export function initConfig(): string {
-  mkdirSync(REPORTER_DIR, { recursive: true });
-  mkdirSync(join(REPORTER_DIR, "reports"), { recursive: true });
-  mkdirSync(join(REPORTER_DIR, "notebook"), { recursive: true });
-  mkdirSync(join(REPORTER_DIR, "auth"), { recursive: true });
+  mkdirSync(VWORK_DIR, { recursive: true });
+  mkdirSync(join(VWORK_DIR, "reports"), { recursive: true });
+  mkdirSync(join(VWORK_DIR, "notebook"), { recursive: true });
+  mkdirSync(join(VWORK_DIR, "auth"), { recursive: true });
 
   if (existsSync(CONFIG_PATH)) {
     return `Config already exists at ${CONFIG_PATH}`;

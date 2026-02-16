@@ -51,7 +51,7 @@ export async function validateSlackToken(token: string): Promise<{ team: string;
 
 /**
  * Prompt the user to paste their Slack Bot User OAuth Token.
- * Validates the token format and saves it to ~/reporter/tokens.json.
+ * Validates the token format and saves it to ~/vwork/tokens.json.
  */
 export async function promptSlackToken(): Promise<void> {
   printSlackSetupGuide();
@@ -99,12 +99,12 @@ export async function promptSlackToken(): Promise<void> {
 
 const SLACK_APP_MANIFEST = {
   display_information: {
-    name: "Reporter",
-    description: "AI-powered work reporting assistant",
+    name: "VWork",
+    description: "AI-powered work assistant",
   },
   features: {
     bot_user: {
-      display_name: "reporter",
+      display_name: "vwork",
       always_online: false,
     },
   },

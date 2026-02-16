@@ -61,7 +61,7 @@ export class AnthropicProvider implements LLMProvider {
 
     throw new Error(
       `No Anthropic auth configured.\n` +
-      `  Run "reporter login anthropic" for browser-based OAuth (recommended)\n` +
+      `  Run "vwork login anthropic" for browser-based OAuth (recommended)\n` +
       `  Or set api_key_env in config / ANTHROPIC_API_KEY env var`
     );
   }
@@ -231,7 +231,7 @@ export class AnthropicProvider implements LLMProvider {
     return {
       supported: false,
       reason:
-        `Anthropic computer-use execution is not yet enabled in Reporter for model "${this.model}".`,
+        `Anthropic computer-use execution is not yet enabled in VWork for model "${this.model}".`,
     };
   }
 

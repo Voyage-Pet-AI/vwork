@@ -280,10 +280,10 @@ async function cmdAuth() {
       return cmdAuthSlack();
     default:
       console.log(`Usage:
-  reporter auth login     Authenticate with Atlassian (Jira) via browser OAuth
-  reporter auth logout    Remove stored Atlassian tokens
-  reporter auth status    Show Atlassian authentication status
-  reporter auth slack     Authenticate with Slack via bot token`);
+  vwork auth login     Authenticate with Atlassian (Jira) via browser OAuth
+  vwork auth logout    Remove stored Atlassian tokens
+  vwork auth status    Show Atlassian authentication status
+  vwork auth slack     Authenticate with Slack via bot token`);
       process.exit(1);
   }
 }
@@ -292,7 +292,7 @@ const CALLBACK_PORT = 32191;
 
 async function cmdAuthLogin() {
   if (!configExists()) {
-    error(`Config not found. Run "reporter init" first.`);
+    error(`Config not found. Run "vwork init" first.`);
     process.exit(1);
   }
 
@@ -318,7 +318,7 @@ async function cmdAuthLogin() {
   }
 
   // Verify by connecting and listing tools
-  const client = new Client({ name: "reporter", version: "0.1.0" });
+  const client = new Client({ name: "vwork", version: "0.1.0" });
   await client.connect(transport);
   const result = await client.listTools();
   log(`Authenticated — ${result.tools.length} Jira tools available`);
@@ -338,7 +338,7 @@ function cmdAuthStatus() {
   const info = getAtlassianTokenInfo();
   if (!info.hasTokens) {
     console.log("Atlassian: Not authenticated");
-    console.log('  Run "reporter auth login" to authenticate.');
+    console.log('  Run "vwork auth login" to authenticate.');
   } else {
     console.log("Atlassian: Authenticated");
     if (info.scope) console.log(`  Scope: ${info.scope}`);
@@ -349,13 +349,13 @@ function cmdAuthStatus() {
     console.log("Slack: Token stored");
   } else {
     console.log("Slack: Not authenticated");
-    console.log('  Run "reporter login slack" or "reporter auth slack" to authenticate.');
+    console.log('  Run "vwork login slack" or "vwork auth slack" to authenticate.');
   }
 }
 
 async function cmdAuthSlack() {
   if (!configExists()) {
-    error(`Config not found. Run "reporter init" first.`);
+    error(`Config not found. Run "vwork init" first.`);
     process.exit(1);
   }
 
@@ -375,10 +375,10 @@ async function cmdLogin() {
       return promptSlackToken();
     default:
       console.log(`Usage:
-  reporter login github               Authenticate with GitHub via browser OAuth
-  reporter login anthropic             Authenticate with Anthropic via OAuth (creates API key)
-  reporter login openai                Authenticate with OpenAI via OAuth (ChatGPT Pro/Plus)
-  reporter login slack                 Authenticate with Slack via bot token`);
+  vwork login github               Authenticate with GitHub via browser OAuth
+  vwork login anthropic             Authenticate with Anthropic via OAuth (creates API key)
+  vwork login openai                Authenticate with OpenAI via OAuth (ChatGPT Pro/Plus)
+  vwork login slack                 Authenticate with Slack via bot token`);
       process.exit(1);
   }
 }
@@ -396,17 +396,17 @@ async function cmdLogout() {
       return logoutSlack();
     default:
       console.log(`Usage:
-  reporter logout github      Remove stored GitHub token
-  reporter logout anthropic   Remove stored Anthropic tokens
-  reporter logout openai      Remove stored OpenAI tokens
-  reporter logout slack       Remove stored Slack token`);
+  vwork logout github      Remove stored GitHub token
+  vwork logout anthropic   Remove stored Anthropic tokens
+  vwork logout openai      Remove stored OpenAI tokens
+  vwork logout slack       Remove stored Slack token`);
       process.exit(1);
   }
 }
 
 async function cmdChat() {
   if (!configExists()) {
-    error(`Config not found. Run "reporter init" first.`);
+    error(`Config not found. Run "vwork init" first.`);
     process.exit(1);
   }
 
@@ -449,7 +449,7 @@ async function cmdChat() {
 
 async function cmdRun() {
   if (!configExists()) {
-    error(`Config not found. Run "reporter init" first.`);
+    error(`Config not found. Run "vwork init" first.`);
     process.exit(1);
   }
 
@@ -537,11 +537,11 @@ function cmdMcp() {
       return cmdMcpList();
     default:
       console.log(`Usage:
-  reporter mcp add <name> --transport stdio -- <cmd> [args]   Add stdio server
-  reporter mcp add <name> --transport http <url>              Add HTTP server
-  reporter mcp add <name> -e KEY=VAL -e KEY2=VAL2             With env vars
-  reporter mcp remove <name>                                  Remove a server
-  reporter mcp list                                           List servers`);
+  vwork mcp add <name> --transport stdio -- <cmd> [args]   Add stdio server
+  vwork mcp add <name> --transport http <url>              Add HTTP server
+  vwork mcp add <name> -e KEY=VAL -e KEY2=VAL2             With env vars
+  vwork mcp remove <name>                                  Remove a server
+  vwork mcp list                                           List servers`);
       process.exit(1);
   }
 }
@@ -549,7 +549,7 @@ function cmdMcp() {
 function cmdMcpAdd() {
   const name = args[2];
   if (!name) {
-    error("Missing server name. Usage: reporter mcp add <name> ...");
+    error("Missing server name. Usage: vwork mcp add <name> ...");
     process.exit(1);
   }
 
@@ -605,7 +605,7 @@ function cmdMcpAdd() {
       url = args[i];
     }
     if (!url) {
-      error("HTTP transport requires a URL. Usage: reporter mcp add <name> --transport http <url>");
+      error("HTTP transport requires a URL. Usage: vwork mcp add <name> --transport http <url>");
       process.exit(1);
     }
     def.url = url;
@@ -623,7 +623,7 @@ function cmdMcpAdd() {
 function cmdMcpRemove() {
   const name = args[2];
   if (!name) {
-    error("Missing server name. Usage: reporter mcp remove <name>");
+    error("Missing server name. Usage: vwork mcp remove <name>");
     process.exit(1);
   }
 
@@ -644,7 +644,7 @@ function cmdMcpList() {
 
   if (servers.length === 0) {
     console.log("No custom MCP servers configured.");
-    console.log(`Add one with: reporter mcp add <name> --transport stdio -- <cmd>`);
+    console.log(`Add one with: vwork mcp add <name> --transport stdio -- <cmd>`);
     return;
   }
 
@@ -660,7 +660,7 @@ function cmdMcpList() {
 
 async function cmdMemory() {
   if (!configExists()) {
-    error(`Config not found. Run "reporter init" first.`);
+    error(`Config not found. Run "vwork init" first.`);
     process.exit(1);
   }
 
@@ -699,13 +699,13 @@ async function cmdMemory() {
         return cmdMemoryForget(db);
       default:
         console.log(`Usage:
-  reporter memory index              Embed all existing reports into vector DB
-  reporter memory add <text>         Store a note for future context
-  reporter memory search <query>     Search memory (debug tool)
-  reporter memory stats              Show memory statistics
-  reporter memory clear              Wipe all embeddings
-  reporter memory notes              List stored notes
-  reporter memory forget <date>      Remove a specific note by date`);
+  vwork memory index              Embed all existing reports into vector DB
+  vwork memory add <text>         Store a note for future context
+  vwork memory search <query>     Search memory (debug tool)
+  vwork memory stats              Show memory statistics
+  vwork memory clear              Wipe all embeddings
+  vwork memory notes              List stored notes
+  vwork memory forget <date>      Remove a specific note by date`);
         process.exit(1);
     }
   } finally {
@@ -758,7 +758,7 @@ async function cmdMemoryAdd(
 ) {
   const text = args.slice(2).join(" ");
   if (!text) {
-    error('Missing note text. Usage: reporter memory add "your note here"');
+    error('Missing note text. Usage: vwork memory add "your note here"');
     process.exit(1);
   }
 
@@ -774,7 +774,7 @@ async function cmdMemorySearch(
 ) {
   const query = args.slice(2).join(" ");
   if (!query) {
-    error('Missing query. Usage: reporter memory search "your query"');
+    error('Missing query. Usage: vwork memory search "your query"');
     process.exit(1);
   }
 
@@ -825,7 +825,7 @@ function cmdMemoryNotes(db: VectorDB) {
 function cmdMemoryForget(db: VectorDB) {
   const date = args[2];
   if (!date) {
-    error('Missing date. Usage: reporter memory forget <date>');
+    error('Missing date. Usage: vwork memory forget <date>');
     process.exit(1);
   }
 
@@ -846,7 +846,7 @@ function cmdMemoryForget(db: VectorDB) {
 
 function cmdHistory() {
   if (!configExists()) {
-    error(`Config not found. Run "reporter init" first.`);
+    error(`Config not found. Run "vwork init" first.`);
     process.exit(1);
   }
 
@@ -854,7 +854,7 @@ function cmdHistory() {
   const reports = listReports(config);
 
   if (reports.length === 0) {
-    console.log("No reports yet. Run \"reporter run\" to generate one.");
+    console.log("No reports yet. Run \"vwork run\" to generate one.");
     return;
   }
 
@@ -870,7 +870,7 @@ async function cmdSchedule() {
   }
 
   console.log(`Usage:
-  reporter schedule run <name>    Run a scheduled report (used by cron)
+  vwork schedule run <name>    Run a scheduled report (used by cron)
 
 Manage schedules interactively in chat:
   /report                         List schedules
@@ -882,7 +882,7 @@ Manage schedules interactively in chat:
 async function cmdScheduleRun() {
   const name = args[2];
   if (!name) {
-    error("Missing schedule name. Usage: reporter schedule run <name>");
+    error("Missing schedule name. Usage: vwork schedule run <name>");
     process.exit(1);
   }
 
@@ -893,7 +893,7 @@ async function cmdScheduleRun() {
   }
 
   if (!configExists()) {
-    error(`Config not found. Run "reporter init" first.`);
+    error(`Config not found. Run "vwork init" first.`);
     process.exit(1);
   }
 
@@ -914,7 +914,7 @@ async function cmdScheduleRun() {
   if (servers.length === 0) {
     const msg = "No integrations enabled.";
     error(msg);
-    await sendNotification("Reporter", name, msg);
+    await sendNotification("VWork", name, msg);
     process.exit(1);
   }
 
@@ -943,16 +943,16 @@ async function cmdScheduleRun() {
 
     if (result.savedPath) {
       log(`Report saved to ${result.savedPath}`);
-      await sendNotification("Reporter", name, `Report generated: ${result.savedPath}`);
+      await sendNotification("VWork", name, `Report generated: ${result.savedPath}`);
     } else if (result.saveError) {
-      await sendNotification("Reporter", `${name} warning`, `Generated report but failed to save: ${result.saveError}`);
+      await sendNotification("VWork", `${name} warning`, `Generated report but failed to save: ${result.saveError}`);
     } else {
-      await sendNotification("Reporter", name, "Report generated successfully.");
+      await sendNotification("VWork", name, "Report generated successfully.");
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     error(msg);
-    await sendNotification("Reporter", `${name} failed`, msg.slice(0, 200));
+    await sendNotification("VWork", `${name} failed`, msg.slice(0, 200));
     process.exit(1);
   } finally {
     await mcpClient.disconnect();
@@ -960,49 +960,49 @@ async function cmdScheduleRun() {
 }
 
 function cmdHelp() {
-  console.log(`reporter — AI-powered work assistant
+  console.log(`vwork — AI-powered work assistant
 
 Commands:
-  reporter                             Start interactive chat (default)
-  reporter chat                        Start interactive chat
-  reporter init                        Create config at ~/reporter/config.toml
-  reporter run                         Generate report (stdout)
-  reporter run --dry                   List available tools, skip LLM
-  reporter run --no-save               Don't save report to disk
-  reporter login anthropic             Authenticate with Anthropic via OAuth
-  reporter logout anthropic            Remove stored Anthropic tokens
-  reporter login openai                Authenticate with OpenAI via OAuth (ChatGPT Pro/Plus)
-  reporter logout openai               Remove stored OpenAI tokens
-  reporter login github                Authenticate with GitHub via browser OAuth
-  reporter logout github               Remove stored GitHub token
-  reporter login slack                 Authenticate with Slack via bot token
-  reporter logout slack                Remove stored Slack token
-  reporter auth login                  Authenticate with Atlassian (Jira) via browser OAuth
-  reporter auth logout                 Remove stored Atlassian tokens
-  reporter auth status                 Show Atlassian authentication status
-  reporter auth slack                  Authenticate with Slack via bot token
-  reporter mcp add <name> ...          Add a custom MCP server
-  reporter mcp remove <name>           Remove a custom MCP server
-  reporter mcp list                    List custom MCP servers
-  reporter memory index                Embed existing reports into vector DB
-  reporter memory add <text>           Store a note for future context
-  reporter memory search <query>       Search memory (debug tool)
-  reporter memory stats                Show memory statistics
-  reporter memory clear                Wipe all embeddings
-  reporter memory notes                List stored notes
-  reporter memory forget <date>        Remove a note by date
-  reporter history                     List past reports
-  reporter schedule run <name>         Run a scheduled report (used by cron)
+  vwork                             Start interactive chat (default)
+  vwork chat                        Start interactive chat
+  vwork init                        Create config at ~/vwork/config.toml
+  vwork run                         Generate report (stdout)
+  vwork run --dry                   List available tools, skip LLM
+  vwork run --no-save               Don't save report to disk
+  vwork login anthropic             Authenticate with Anthropic via OAuth
+  vwork logout anthropic            Remove stored Anthropic tokens
+  vwork login openai                Authenticate with OpenAI via OAuth (ChatGPT Pro/Plus)
+  vwork logout openai               Remove stored OpenAI tokens
+  vwork login github                Authenticate with GitHub via browser OAuth
+  vwork logout github               Remove stored GitHub token
+  vwork login slack                 Authenticate with Slack via bot token
+  vwork logout slack                Remove stored Slack token
+  vwork auth login                  Authenticate with Atlassian (Jira) via browser OAuth
+  vwork auth logout                 Remove stored Atlassian tokens
+  vwork auth status                 Show Atlassian authentication status
+  vwork auth slack                  Authenticate with Slack via bot token
+  vwork mcp add <name> ...          Add a custom MCP server
+  vwork mcp remove <name>           Remove a custom MCP server
+  vwork mcp list                    List custom MCP servers
+  vwork memory index                Embed existing reports into vector DB
+  vwork memory add <text>           Store a note for future context
+  vwork memory search <query>       Search memory (debug tool)
+  vwork memory stats                Show memory statistics
+  vwork memory clear                Wipe all embeddings
+  vwork memory notes                List stored notes
+  vwork memory forget <date>        Remove a note by date
+  vwork history                     List past reports
+  vwork schedule run <name>         Run a scheduled report (used by cron)
 
 Options:
   -v, --version                    Show version
 
 Environment:
-  ANTHROPIC_API_KEY    Claude API key (optional if using "reporter login anthropic")
-  OPENAI_API_KEY       OpenAI API key (optional if using "reporter login openai")
-  GITHUB_TOKEN         GitHub token (optional if using "reporter login github")
-  SLACK_BOT_TOKEN      Slack bot token (optional if using "reporter auth slack")
-  REPORTER_DEBUG       Set to 1 for debug logging`);
+  ANTHROPIC_API_KEY    Claude API key (optional if using "vwork login anthropic")
+  OPENAI_API_KEY       OpenAI API key (optional if using "vwork login openai")
+  GITHUB_TOKEN         GitHub token (optional if using "vwork login github")
+  SLACK_BOT_TOKEN      Slack bot token (optional if using "vwork auth slack")
+  VWORK_DEBUG          Set to 1 for debug logging`);
 }
 
 main().catch((e) => {

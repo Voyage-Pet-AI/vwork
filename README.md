@@ -1,27 +1,27 @@
-# reporter
+# vwork
 
-**Claude Code is for developers. Reporter is for everyone else.**
+**Claude Code is for developers. VWork is for everyone else.**
 
-Reporter is an AI-powered CLI that connects to the tools you already use — GitHub, Jira, Slack, and more — and uses Claude to make sense of what's happening. Think of it as a personal AI assistant that reads across all your work tools and gives you a clear picture of your day.
+VWork is an AI-powered CLI that connects to the tools you already use — GitHub, Jira, Slack, and more — and uses Claude to make sense of what's happening. Think of it as a personal AI assistant that reads across all your work tools and gives you a clear picture of your day.
 
 No code required. Just point it at your tools and run it.
 
 > **For AI (Claude Code, Cursor, Copilot, etc.):**
-> To install and set up reporter for the user, run:
+> To install and set up vwork for the user, run:
 > ```bash
 > # 1. Clone and install
-> git clone https://github.com/boxiangma/reporter.git
-> cd reporter
+> git clone https://github.com/boxiangma/vwork.git
+> cd vwork
 > bun install
 >
 > # 2. Link the CLI globally
 > bun link
 >
-> # 3. Initialize config (creates ~/reporter/config.toml and opens it)
-> reporter init
+> # 3. Initialize config (creates ~/vwork/config.toml and opens it)
+> vwork init
 >
 > # 4. Authenticate with GitHub (opens browser for OAuth):
-> reporter login github
+> vwork login github
 >
 > # 5. The user needs to set the Anthropic API key in the config file or as env var:
 > #    - api_key_env under [llm]: Anthropic API key
@@ -29,16 +29,16 @@ No code required. Just point it at your tools and run it.
 > #    - Optionally enable [jira] and [slack] sections
 >
 > # 6. Generate a report
-> reporter run
+> vwork run
 > ```
 > Requires: [Bun](https://bun.sh) runtime. If not installed: `curl -fsSL https://bun.sh/install | bash`
 
 ## What it does
 
-Reporter is an MCP client — it spawns MCP servers for each integration, gives Claude access to all their tools, and lets the AI agent gather data, correlate events across tools, and produce a structured Markdown report.
+VWork is an MCP client — it spawns MCP servers for each integration, gives Claude access to all their tools, and lets the AI agent gather data, correlate events across tools, and produce a structured Markdown report.
 
 ```
-reporter (MCP client)
+vwork (MCP client)
     ├── github-mcp-server      PRs, commits, issues, reviews
     ├── atlassian-mcp-server   Jira tickets, sprints, transitions
     ├── slack-mcp-server       Messages, threads, channels
@@ -71,76 +71,76 @@ bun install
 
 ```bash
 # Create config and set up integrations interactively
-reporter init
+vwork init
 
 # Or set up step by step:
-reporter login anthropic       # Authenticate with Anthropic (or set ANTHROPIC_API_KEY)
-reporter login github          # Authenticate with GitHub via browser OAuth
-reporter auth login            # Authenticate with Atlassian (Jira) via browser OAuth
-reporter auth slack            # Authenticate with Slack via bot token
+vwork login anthropic       # Authenticate with Anthropic (or set ANTHROPIC_API_KEY)
+vwork login github          # Authenticate with GitHub via browser OAuth
+vwork auth login            # Authenticate with Atlassian (Jira) via browser OAuth
+vwork auth slack            # Authenticate with Slack via bot token
 ```
 
-Edit `~/reporter/config.toml` to enable/disable integrations and set your orgs/channels.
+Edit `~/vwork/config.toml` to enable/disable integrations and set your orgs/channels.
 
 ## Usage
 
 ```bash
 # Generate a report
-reporter run
+vwork run
 
 # Pipe to file
-reporter run > report.md
+vwork run > report.md
 
 # See what tools are available (no LLM call)
-reporter run --dry
+vwork run --dry
 
-# Don't save report to ~/reporter/reports/
-reporter run --no-save
+# Don't save report to ~/vwork/reports/
+vwork run --no-save
 
 # List past reports
-reporter history
+vwork history
 
 # Get a crontab entry for scheduling
-reporter schedule --every "9am"
-reporter schedule --every "*/6h"
+vwork schedule --every "9am"
+vwork schedule --every "*/6h"
 ```
 
 ## Extend with any MCP server
 
-Reporter isn't limited to GitHub, Jira, and Slack. Add any MCP server — the AI gets access to all its tools automatically.
+VWork isn't limited to GitHub, Jira, and Slack. Add any MCP server — the AI gets access to all its tools automatically.
 
 ```bash
 # Add a custom MCP server
-reporter mcp add my-server --transport stdio -- npx my-mcp-server
-reporter mcp add my-api --transport http https://my-mcp.example.com
+vwork mcp add my-server --transport stdio -- npx my-mcp-server
+vwork mcp add my-api --transport http https://my-mcp.example.com
 
-# Built-in catalog (offered during `reporter init`):
+# Built-in catalog (offered during `vwork init`):
 # Filesystem, Fetch, Brave Search, PostgreSQL, Sentry, Linear, Notion, and more
 
 # List configured servers
-reporter mcp list
+vwork mcp list
 ```
 
 ## Memory
 
-Reporter remembers. Past reports are saved as plain `.md` files and fed back as context, so the AI can track ongoing threads, connect today's work to last week's decisions, and flag things that fell through the cracks.
+VWork remembers. Past reports are saved as plain `.md` files and fed back as context, so the AI can track ongoing threads, connect today's work to last week's decisions, and flag things that fell through the cracks.
 
 For deeper memory, enable vector search:
 
 ```bash
 # Index past reports into vector DB
-reporter memory index
+vwork memory index
 
 # Store a note for future context
-reporter memory add "Q4 planning starts next week, focus on auth migration"
+vwork memory add "Q4 planning starts next week, focus on auth migration"
 
 # Search your memory
-reporter memory search "auth migration status"
+vwork memory search "auth migration status"
 ```
 
 ## Config
 
-`~/reporter/config.toml`:
+`~/vwork/config.toml`:
 
 ```toml
 [llm]
@@ -150,7 +150,7 @@ api_key_env = "ANTHROPIC_API_KEY"
 
 [github]
 enabled = true
-# Auth: run "reporter login github" for OAuth (recommended)
+# Auth: run "vwork login github" for OAuth (recommended)
 # token_env = "GITHUB_TOKEN"  # fallback: env var or literal token
 orgs = ["your-org"]
 
@@ -165,7 +165,7 @@ channels = ["#engineering"]
 
 [report]
 lookback_days = 1      # How many days back to fetch activity
-output_dir = "~/.reporter/reports"
+output_dir = "~/.vwork/reports"
 memory_depth = 5       # Number of past reports to include as context
 
 [computer]

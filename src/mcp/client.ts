@@ -55,7 +55,7 @@ export class MCPClientManager {
         }
 
         const client = new Client({
-          name: "reporter",
+          name: "vwork",
           version: "0.1.0",
         });
 

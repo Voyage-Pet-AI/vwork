@@ -7,11 +7,11 @@ const config: Config = {
   github: { enabled: false, orgs: [] },
   jira: { enabled: false, url: "" },
   slack: { enabled: false, channels: [] },
-  report: { lookback_days: 1, output_dir: "~/reporter/reports", memory_depth: 5 },
+  report: { lookback_days: 1, output_dir: "~/vwork/reports", memory_depth: 5 },
   chat: { report_postprocess_enabled: false, report_inbox_replay_limit: 20 },
   todo: {
     enabled: true,
-    notebook_dir: "~/reporter/notebook",
+    notebook_dir: "~/vwork/notebook",
     default_mode: "minimal",
     carryover_prompt: true,
   },
@@ -34,9 +34,9 @@ describe("buildChatSystemPrompt", () => {
     );
     expect(prompt).toContain("## Todo Context");
     expect(prompt).toContain("Active: Build feature");
-    expect(prompt).toContain("reporter__todo_read");
-    expect(prompt).toContain("reporter__todo_write");
-    expect(prompt).toContain("ALWAYS call `reporter__todo_read` first");
+    expect(prompt).toContain("vwork__todo_read");
+    expect(prompt).toContain("vwork__todo_write");
+    expect(prompt).toContain("ALWAYS call `vwork__todo_read` first");
   });
 
   test("omits todo context when empty", () => {

@@ -3,14 +3,14 @@ import { join, resolve, dirname } from "path";
 import { homedir } from "os";
 import type { LLMTool, ToolCall } from "../../llm/provider.js";
 
-const REPORTER_DIR = join(homedir(), "reporter");
+const VWORK_DIR = join(homedir(), "vwork");
 
-/** Resolve path relative to ~/reporter/ and reject anything outside. */
+/** Resolve path relative to ~/vwork/ and reject anything outside. */
 function safePath(path: string): string {
-  const cleaned = path.replace(/^~\/reporter\/?/, "");
-  const resolved = resolve(REPORTER_DIR, cleaned);
-  if (!resolved.startsWith(REPORTER_DIR)) {
-    throw new Error("Access denied: path must be within ~/reporter/");
+  const cleaned = path.replace(/^~\/vwork\/?/, "");
+  const resolved = resolve(VWORK_DIR, cleaned);
+  if (!resolved.startsWith(VWORK_DIR)) {
+    throw new Error("Access denied: path must be within ~/vwork/");
   }
   return resolved;
 }
@@ -25,7 +25,7 @@ function resolvePath(path: string): string {
 
 export const fileTools: LLMTool[] = [
   {
-    name: "reporter__read_file",
+    name: "vwork__read_file",
     description:
       "Read a file from the filesystem. Supports absolute paths and ~/. " +
       "Returns numbered lines. Use offset/limit for large files.",
@@ -46,28 +46,28 @@ export const fileTools: LLMTool[] = [
     },
   },
   {
-    name: "reporter__write_file",
+    name: "vwork__write_file",
     description:
-      "Write content to a file in ~/reporter/. Creates directories as needed. Path is relative to ~/reporter/.",
+      "Write content to a file in ~/vwork/. Creates directories as needed. Path is relative to ~/vwork/.",
     input_schema: {
       type: "object" as const,
       properties: {
-        path: { type: "string", description: "File path relative to ~/reporter/" },
+        path: { type: "string", description: "File path relative to ~/vwork/" },
         content: { type: "string", description: "File content to write" },
       },
       required: ["path", "content"],
     },
   },
   {
-    name: "reporter__list_files",
+    name: "vwork__list_files",
     description:
-      "List files and directories under ~/reporter/. Path is relative to ~/reporter/ (defaults to root).",
+      "List files and directories under ~/vwork/. Path is relative to ~/vwork/ (defaults to root).",
     input_schema: {
       type: "object" as const,
       properties: {
         path: {
           type: "string",
-          description: "Directory path relative to ~/reporter/ (default: root)",
+          description: "Directory path relative to ~/vwork/ (default: root)",
         },
       },
     },
@@ -76,7 +76,7 @@ export const fileTools: LLMTool[] = [
 
 export async function executeFileTool(tc: ToolCall): Promise<string> {
   switch (tc.name) {
-    case "reporter__read_file": {
+    case "vwork__read_file": {
       const p = resolvePath(tc.input.path as string);
       if (!existsSync(p)) return `Error: file not found: ${tc.input.path}`;
       const stat = statSync(p);
@@ -105,13 +105,13 @@ export async function executeFileTool(tc: ToolCall): Promise<string> {
       }
       return result;
     }
-    case "reporter__write_file": {
+    case "vwork__write_file": {
       const p = safePath(tc.input.path as string);
       mkdirSync(dirname(p), { recursive: true });
       writeFileSync(p, tc.input.content as string);
       return `Written to ${tc.input.path}`;
     }
-    case "reporter__list_files": {
+    case "vwork__list_files": {
       const p = safePath((tc.input.path as string) ?? "");
       if (!existsSync(p)) return `Error: directory not found: ${tc.input.path ?? "/"}`;
       const entries = readdirSync(p);

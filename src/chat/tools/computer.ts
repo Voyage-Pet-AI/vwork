@@ -17,7 +17,7 @@ export interface ComputerToolContext {
 
 export const computerTools: LLMTool[] = [
   {
-    name: "reporter__computer",
+    name: "vwork__computer",
     description:
       "Run the computer-use subagent for interactive browser tasks (click/type/navigate). " +
       "Use this for setup flows and pages that require UI interaction.",

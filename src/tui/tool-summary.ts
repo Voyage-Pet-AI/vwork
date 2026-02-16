@@ -17,34 +17,34 @@ export function toolCallSummary(tc: ToolCall): string {
 
   // Built-in tools with known shapes
   switch (tc.name) {
-    case "reporter__bash":
+    case "vwork__bash":
       return inp.command ? truncate(String(inp.command)) : "";
-    case "reporter__read_file":
-    case "reporter__write_file":
-    case "reporter__list_files":
+    case "vwork__read_file":
+    case "vwork__write_file":
+    case "vwork__list_files":
       return inp.path ? truncate(String(inp.path)) : "";
-    case "reporter__glob":
+    case "vwork__glob":
       return inp.pattern ? truncate(String(inp.pattern)) : "";
-    case "reporter__grep":
+    case "vwork__grep":
       return inp.pattern ? truncate(String(inp.pattern)) : "";
-    case "reporter__webfetch":
+    case "vwork__webfetch":
       return inp.url ? truncate(String(inp.url)) : "";
-    case "reporter__computer":
+    case "vwork__computer":
       return inp.task ? truncate(String(inp.task)) : "";
-    case "reporter__generate_report": {
+    case "vwork__generate_report": {
       const kind = typeof inp.kind === "string" ? inp.kind : "custom";
       const lookback = typeof inp.lookback_days === "number" ? inp.lookback_days : "";
       return `${kind}${lookback ? ` ${lookback}d` : ""}`;
     }
-    case "reporter__report_add_schedule":
-    case "reporter__report_remove_schedule":
-    case "reporter__report_update_schedule":
+    case "vwork__report_add_schedule":
+    case "vwork__report_remove_schedule":
+    case "vwork__report_update_schedule":
       return inp.name ? truncate(String(inp.name)) : "";
-    case "reporter__report_list_schedules":
+    case "vwork__report_list_schedules":
       return "";
-    case "reporter__todo_read":
+    case "vwork__todo_read":
       return "";
-    case "reporter__todo_write": {
+    case "vwork__todo_write": {
       if (Array.isArray(inp.todos)) return `${inp.todos.length} todos`;
       return "";
     }
@@ -61,21 +61,21 @@ export function toolCallSummary(tc: ToolCall): string {
 }
 
 const FRIENDLY_NAMES: Record<string, string> = {
-  reporter__bash: "Bash",
-  reporter__read_file: "Read",
-  reporter__write_file: "Write",
-  reporter__list_files: "ListFiles",
-  reporter__glob: "Glob",
-  reporter__grep: "Grep",
-  reporter__webfetch: "WebFetch",
-  reporter__computer: "Computer",
-  reporter__generate_report: "GenerateReport",
-  reporter__report_list_schedules: "ListSchedules",
-  reporter__report_add_schedule: "AddSchedule",
-  reporter__report_remove_schedule: "RemoveSchedule",
-  reporter__report_update_schedule: "UpdateSchedule",
-  reporter__todo_read: "TodoRead",
-  reporter__todo_write: "TodoWrite",
+  vwork__bash: "Bash",
+  vwork__read_file: "Read",
+  vwork__write_file: "Write",
+  vwork__list_files: "ListFiles",
+  vwork__glob: "Glob",
+  vwork__grep: "Grep",
+  vwork__webfetch: "WebFetch",
+  vwork__computer: "Computer",
+  vwork__generate_report: "GenerateReport",
+  vwork__report_list_schedules: "ListSchedules",
+  vwork__report_add_schedule: "AddSchedule",
+  vwork__report_remove_schedule: "RemoveSchedule",
+  vwork__report_update_schedule: "UpdateSchedule",
+  vwork__todo_read: "TodoRead",
+  vwork__todo_write: "TodoWrite",
 };
 
 /** Map raw tool name to a short display name. */
@@ -106,29 +106,29 @@ export function toolResultSummary(toolName: string, result: string, isError?: bo
   const lines = countLines(result);
 
   switch (toolName) {
-    case "reporter__bash": {
+    case "vwork__bash": {
       if (!result.trim()) return "(no output)";
       const fl = firstLine(result);
       return lines > 1 ? `${fl} (+${lines - 1} lines)` : fl;
     }
-    case "reporter__read_file":
+    case "vwork__read_file":
       return `Read ${lines} lines`;
-    case "reporter__write_file":
+    case "vwork__write_file":
       return firstLine(result) || "Written";
-    case "reporter__glob":
-    case "reporter__list_files": {
+    case "vwork__glob":
+    case "vwork__list_files": {
       const count = result.trim() ? result.trim().split("\n").length : 0;
       return `${count} file${count !== 1 ? "s" : ""}`;
     }
-    case "reporter__grep": {
+    case "vwork__grep": {
       const count = result.trim() ? result.trim().split("\n").length : 0;
       return `${count} match${count !== 1 ? "es" : ""}`;
     }
-    case "reporter__webfetch": {
+    case "vwork__webfetch": {
       const kb = (new TextEncoder().encode(result).length / 1024).toFixed(1);
       return `${kb}KB fetched`;
     }
-    case "reporter__computer": {
+    case "vwork__computer": {
       try {
         const parsed = JSON.parse(result) as {
           ok?: boolean;
@@ -145,7 +145,7 @@ export function toolResultSummary(toolName: string, result: string, isError?: bo
         return firstLine(result);
       }
     }
-    case "reporter__generate_report": {
+    case "vwork__generate_report": {
       try {
         const parsed = JSON.parse(result) as { saved_path?: string | null; save_error?: string | null };
         if (parsed.save_error) return `save failed: ${parsed.save_error}`;
@@ -153,13 +153,13 @@ export function toolResultSummary(toolName: string, result: string, isError?: bo
       } catch {}
       return "report generated";
     }
-    case "reporter__report_list_schedules":
-    case "reporter__report_add_schedule":
-    case "reporter__report_remove_schedule":
-    case "reporter__report_update_schedule":
+    case "vwork__report_list_schedules":
+    case "vwork__report_add_schedule":
+    case "vwork__report_remove_schedule":
+    case "vwork__report_update_schedule":
       return firstLine(result) || "ok";
-    case "reporter__todo_read":
-    case "reporter__todo_write": {
+    case "vwork__todo_read":
+    case "vwork__todo_write": {
       try {
         const parsed = JSON.parse(result) as { open_count?: number; todos?: unknown[] };
         const total = Array.isArray(parsed.todos) ? parsed.todos.length : 0;

@@ -42,7 +42,7 @@ function buildConfig(notebookDir: string): Config {
 }
 
 beforeEach(() => {
-  testRoot = mkdtempSync(join(tmpdir(), "reporter-todo-store-test-"));
+  testRoot = mkdtempSync(join(tmpdir(), "vwork-todo-store-test-"));
 });
 
 afterEach(() => {
@@ -89,7 +89,7 @@ describe("todo sidecar store", () => {
         "# Daily",
         "",
         "## Active",
-        "- [ ] Build todo list #reporter",
+        "- [ ] Build todo list #vwork",
         "## Blocked",
         "- [ ] Waiting on release",
         "## Completed Today",

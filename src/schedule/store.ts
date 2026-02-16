@@ -14,10 +14,10 @@ interface ScheduleStore {
   schedules: Schedule[];
 }
 
-const STORE_PATH = join(homedir(), "reporter", "schedules.json");
+const STORE_PATH = join(homedir(), "vwork", "schedules.json");
 
 function ensureDir() {
-  mkdirSync(join(homedir(), "reporter"), { recursive: true });
+  mkdirSync(join(homedir(), "vwork"), { recursive: true });
 }
 
 export function loadSchedules(): Schedule[] {

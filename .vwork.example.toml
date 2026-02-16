@@ -1,32 +1,32 @@
 [llm]
 provider = "anthropic"
 model = "claude-sonnet-4-5-20250929"
-# Auth: run "reporter login anthropic" for browser-based OAuth (recommended)
+# Auth: run "vwork login anthropic" for browser-based OAuth (recommended)
 # Or set an API key — env var name like "ANTHROPIC_API_KEY" or the key directly
 # api_key_env = "ANTHROPIC_API_KEY"
 
 [github]
 enabled = true
-# Auth: run "reporter login github" for browser-based OAuth (recommended)
+# Auth: run "vwork login github" for browser-based OAuth (recommended)
 # Or set a token manually:
 # token_env = "GITHUB_TOKEN"
 orgs = ["your-org"]
 
 [jira]
 enabled = false
-# Run "reporter auth login" before enabling
+# Run "vwork auth login" before enabling
 url = "https://mcp.atlassian.com/v1/mcp"
 
 [slack]
 enabled = false
-# Auth: run "reporter auth slack" to paste your Bot User OAuth Token (recommended)
+# Auth: run "vwork auth slack" to paste your Bot User OAuth Token (recommended)
 # Or set a token manually:
 # token_env = "SLACK_BOT_TOKEN"
 channels = ["#engineering", "#standup"]
 
 [report]
 lookback_days = 1
-output_dir = "~/.reporter/reports"
+output_dir = "~/.vwork/reports"
 memory_depth = 5
 
 [chat]

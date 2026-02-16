@@ -5,7 +5,7 @@ import { formatDate, loadAgentTodos, saveAgentTodos } from "../../todo/store.js"
 
 export const todoTools: LLMTool[] = [
   {
-    name: "reporter__todo_read",
+    name: "vwork__todo_read",
     description:
       "Read current todo list. Use this before todo updates so you can preserve untouched items and indices.",
     input_schema: {
@@ -15,9 +15,9 @@ export const todoTools: LLMTool[] = [
     },
   },
   {
-    name: "reporter__todo_write",
+    name: "vwork__todo_write",
     description:
-      "Replace the current todo list with the provided full list. Keep untouched items from reporter__todo_read.",
+      "Replace the current todo list with the provided full list. Keep untouched items from vwork__todo_read.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -86,7 +86,7 @@ export async function executeTodoTool(tc: ToolCall, config: Config): Promise<str
   const date = getDate(tc.input);
 
   switch (tc.name) {
-    case "reporter__todo_read": {
+    case "vwork__todo_read": {
       const todos = loadAgentTodos(config, date);
       return JSON.stringify(
         {
@@ -99,7 +99,7 @@ export async function executeTodoTool(tc: ToolCall, config: Config): Promise<str
       );
     }
 
-    case "reporter__todo_write": {
+    case "vwork__todo_write": {
       const todos = normalizeTodos(tc.input.todos);
       saveAgentTodos(config, date, todos);
       const canonical = loadAgentTodos(config, date);

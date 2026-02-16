@@ -16,7 +16,7 @@ export interface MCPConfig {
   mcpServers: Record<string, MCPServerDef>;
 }
 
-const MCP_CONFIG_PATH = join(homedir(), "reporter", ".mcp.json");
+const MCP_CONFIG_PATH = join(homedir(), "vwork", ".mcp.json");
 
 export function getMCPConfigPath(): string {
   return MCP_CONFIG_PATH;

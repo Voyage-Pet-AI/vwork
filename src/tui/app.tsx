@@ -219,7 +219,7 @@ function App({ session, config, services, onExit }: AppProps) {
           "Todo commands:\n" +
             "  /todo                    Show todo panel\n" +
             "  /todo help               Show this help\n" +
-            "\nUse natural language for updates (for example: `mark no.1 as done`). Reporter will use todo tools automatically.",
+            "\nUse natural language for updates (for example: `mark no.1 as done`). VWork will use todo tools automatically.",
         );
         return;
       }
@@ -294,7 +294,7 @@ function App({ session, config, services, onExit }: AppProps) {
             activityRef.current.lastToolName = undefined;
             setActivityInfo({ ...activityRef.current });
           }
-          if (!isError && (tc.name === "reporter__todo_write" || tc.name === "reporter__todo_read")) {
+          if (!isError && (tc.name === "vwork__todo_write" || tc.name === "vwork__todo_read")) {
             refreshTodos();
           }
         },
@@ -440,7 +440,7 @@ function App({ session, config, services, onExit }: AppProps) {
           label = intent.label ?? kind;
         }
 
-        pushSystem(`Reporter executing report "${label}"...`);
+        pushSystem(`VWork executing report "${label}"...`);
         try {
           const report = await session.runReportToolDirect({
             kind,

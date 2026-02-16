@@ -6,7 +6,7 @@ const MAX_OUTPUT = 30_000; // 30KB
 
 export const bashTools: LLMTool[] = [
   {
-    name: "reporter__bash",
+    name: "vwork__bash",
     description:
       "Execute a shell command via bash. Returns stdout and stderr. " +
       "Each invocation is a fresh shell — no state persists between calls. " +

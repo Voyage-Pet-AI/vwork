@@ -9,9 +9,9 @@ import { grepTools, executeGrepTool } from "./grep.js";
 import { webfetchTools, executeWebfetchTool } from "./webfetch.js";
 import { computerTools, executeComputerTool } from "./computer.js";
 import {
-  reporterGenerateReportTools,
-  executeReporterGenerateReportTool,
-} from "./reporter-generate-report.js";
+  vworkGenerateReportTools,
+  executeVworkGenerateReportTool,
+} from "./vwork-generate-report.js";
 import {
   reportScheduleTools,
   executeReportScheduleTool,
@@ -41,7 +41,7 @@ export function getBuiltinTools(): LLMTool[] {
     ...grepTools,
     ...webfetchTools,
     ...computerTools,
-    ...reporterGenerateReportTools,
+    ...vworkGenerateReportTools,
     ...reportScheduleTools,
     ...todoTools,
   ];
@@ -53,24 +53,24 @@ export async function executeBuiltinTool(
   context?: BuiltinToolContext
 ): Promise<string> {
   switch (tc.name) {
-    case "reporter__read_file":
-    case "reporter__write_file":
-    case "reporter__list_files":
+    case "vwork__read_file":
+    case "vwork__write_file":
+    case "vwork__list_files":
       return executeFileTool(tc);
 
-    case "reporter__bash":
+    case "vwork__bash":
       return executeBashTool(tc, signal);
 
-    case "reporter__glob":
+    case "vwork__glob":
       return executeGlobTool(tc);
 
-    case "reporter__grep":
+    case "vwork__grep":
       return executeGrepTool(tc, signal);
 
-    case "reporter__webfetch":
+    case "vwork__webfetch":
       return executeWebfetchTool(tc, signal);
 
-    case "reporter__computer":
+    case "vwork__computer":
       return executeComputerTool(tc, signal, {
         provider: context?.provider,
         config: context?.config,
@@ -79,25 +79,25 @@ export async function executeBuiltinTool(
         onComputerSessionEvent: context?.onComputerSessionEvent,
       });
 
-    case "reporter__generate_report":
+    case "vwork__generate_report":
       if (!context?.provider || !context?.mcpClient || !context?.config) {
-        throw new Error("reporter__generate_report requires provider, MCP client, and config context");
+        throw new Error("vwork__generate_report requires provider, MCP client, and config context");
       }
-      return executeReporterGenerateReportTool(tc.input, {
+      return executeVworkGenerateReportTool(tc.input, {
         provider: context.provider,
         mcpClient: context.mcpClient,
         config: context.config,
         customServerNames: context.customServerNames ?? [],
       });
 
-    case "reporter__report_list_schedules":
-    case "reporter__report_add_schedule":
-    case "reporter__report_remove_schedule":
-    case "reporter__report_update_schedule":
+    case "vwork__report_list_schedules":
+    case "vwork__report_add_schedule":
+    case "vwork__report_remove_schedule":
+    case "vwork__report_update_schedule":
       return executeReportScheduleTool(tc);
 
-    case "reporter__todo_read":
-    case "reporter__todo_write":
+    case "vwork__todo_read":
+    case "vwork__todo_write":
       if (!context?.config) {
         throw new Error("todo tools require config context");
       }

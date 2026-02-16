@@ -1,13 +1,13 @@
 import { readFileSync, writeFileSync, unlinkSync, existsSync, chmodSync } from "fs";
 import { join } from "path";
-import { getReporterDir } from "../config.js";
+import { getVworkDir } from "../config.js";
 import { log } from "../utils/log.js";
 
 // GitHub OAuth App client ID (public — no secret needed for device flow)
 const CLIENT_ID = "Ov23liYMgQyQCfTxPdOp";
 const SCOPES = "repo read:org";
 
-const TOKEN_FILE = () => join(getReporterDir(), "github_token.json");
+const TOKEN_FILE = () => join(getVworkDir(), "github_token.json");
 
 interface DeviceCodeResponse {
   device_code: string;

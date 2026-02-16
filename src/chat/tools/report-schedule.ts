@@ -27,7 +27,7 @@ function resolveCron(input: Record<string, unknown>): { cron: string; frequencyL
 
 export const reportScheduleTools: LLMTool[] = [
   {
-    name: "reporter__report_list_schedules",
+    name: "vwork__report_list_schedules",
     description: "List report schedules and recent status.",
     input_schema: {
       type: "object" as const,
@@ -35,7 +35,7 @@ export const reportScheduleTools: LLMTool[] = [
     },
   },
   {
-    name: "reporter__report_add_schedule",
+    name: "vwork__report_add_schedule",
     description:
       "Create a report schedule. Provide name and either time_expression (e.g. 9am, */6h, */15m) or cron.",
     input_schema: {
@@ -51,7 +51,7 @@ export const reportScheduleTools: LLMTool[] = [
     },
   },
   {
-    name: "reporter__report_remove_schedule",
+    name: "vwork__report_remove_schedule",
     description: "Remove a report schedule by name and uninstall its crontab entry.",
     input_schema: {
       type: "object" as const,
@@ -62,7 +62,7 @@ export const reportScheduleTools: LLMTool[] = [
     },
   },
   {
-    name: "reporter__report_update_schedule",
+    name: "vwork__report_update_schedule",
     description:
       "Update an existing report schedule. You can change name, prompt, time_expression, cron, or frequency_label.",
     input_schema: {
@@ -82,7 +82,7 @@ export const reportScheduleTools: LLMTool[] = [
 
 export async function executeReportScheduleTool(tc: ToolCall): Promise<string> {
   switch (tc.name) {
-    case "reporter__report_list_schedules": {
+    case "vwork__report_list_schedules": {
       const schedules = listSchedules();
       if (schedules.length === 0) return "No schedules configured.";
       return schedules
@@ -92,7 +92,7 @@ export async function executeReportScheduleTool(tc: ToolCall): Promise<string> {
         )
         .join("\n");
     }
-    case "reporter__report_add_schedule": {
+    case "vwork__report_add_schedule": {
       const name = String(tc.input.name ?? "").trim();
       if (!name) return "Error: missing required field 'name'.";
       if (!isValidName(name)) {
@@ -119,7 +119,7 @@ export async function executeReportScheduleTool(tc: ToolCall): Promise<string> {
       }
       return `Schedule "${name}" added (${frequencyLabel}) and crontab entry installed.`;
     }
-    case "reporter__report_remove_schedule": {
+    case "vwork__report_remove_schedule": {
       const name = String(tc.input.name ?? "").trim();
       if (!name) return "Error: missing required field 'name'.";
       const removed = removeSchedule(name);
@@ -127,7 +127,7 @@ export async function executeReportScheduleTool(tc: ToolCall): Promise<string> {
       await removeCrontabEntry(name);
       return `Schedule "${name}" removed.`;
     }
-    case "reporter__report_update_schedule": {
+    case "vwork__report_update_schedule": {
       const name = String(tc.input.name ?? "").trim();
       if (!name) return "Error: missing required field 'name'.";
 

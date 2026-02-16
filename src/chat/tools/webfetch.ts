@@ -7,7 +7,7 @@ const MAX_TIMEOUT = 120_000;
 
 export const webfetchTools: LLMTool[] = [
   {
-    name: "reporter__webfetch",
+    name: "vwork__webfetch",
     description:
       "Fetch content from a URL. HTML pages are converted to readable markdown. " +
       "Use this to read web pages, documentation, articles, etc.",

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, unlinkSync, existsSync, chmodSync } from "fs";
 import { join } from "path";
-import { getReporterDir, resolveSecret, type Config } from "../config.js";
+import { getVworkDir, resolveSecret, type Config } from "../config.js";
 import { readLine } from "../utils/readline.js";
 import { log, error } from "../utils/log.js";
 
@@ -13,8 +13,8 @@ const MANUAL_REDIRECT_URL = "https://platform.claude.com/oauth/code/callback";
 const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
 const API_KEY_URL = "https://api.anthropic.com/api/oauth/claude_cli/create_api_key";
 
-const KEY_FILE = () => join(getReporterDir(), "auth", "anthropic-key.json");
-const OAUTH_FILE = () => join(getReporterDir(), "auth", "anthropic-oauth.json");
+const KEY_FILE = () => join(getVworkDir(), "auth", "anthropic-key.json");
+const OAUTH_FILE = () => join(getVworkDir(), "auth", "anthropic-oauth.json");
 
 // --- PKCE ---
 
@@ -114,7 +114,7 @@ export async function startAnthropicLogin(): Promise<AnthropicLoginHandle> {
           Authorization: `Bearer ${tokenData.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name: "reporter-cli" }),
+        body: JSON.stringify({ name: "vwork-cli" }),
       });
 
       if (!keyRes.ok) {
@@ -181,7 +181,7 @@ export async function refreshAnthropicOAuth(): Promise<string | undefined> {
   });
 
   if (!tokenRes.ok) {
-    error(`Token refresh failed (${tokenRes.status}). Run "reporter login anthropic" again.`);
+    error(`Token refresh failed (${tokenRes.status}). Run "vwork login anthropic" again.`);
     return undefined;
   }
 

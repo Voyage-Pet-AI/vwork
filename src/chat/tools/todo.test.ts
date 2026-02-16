@@ -34,7 +34,7 @@ function buildConfig(notebookDir: string): Config {
 }
 
 beforeEach(() => {
-  testRoot = mkdtempSync(join(tmpdir(), "reporter-todo-tool-test-"));
+  testRoot = mkdtempSync(join(tmpdir(), "vwork-todo-tool-test-"));
 });
 
 afterEach(() => {
@@ -47,7 +47,7 @@ describe("todo tools", () => {
 
     const writeCall: ToolCall = {
       id: "1",
-      name: "reporter__todo_write",
+      name: "vwork__todo_write",
       input: {
         todos: [
           { id: "a", content: "Build UI", status: "pending", priority: "high" },
@@ -63,7 +63,7 @@ describe("todo tools", () => {
     expect(writeOut.open_count).toBe(1);
     expect(writeOut.todos.length).toBe(2);
 
-    const readCall: ToolCall = { id: "2", name: "reporter__todo_read", input: {} };
+    const readCall: ToolCall = { id: "2", name: "vwork__todo_read", input: {} };
     const readOut = JSON.parse(await executeTodoTool(readCall, config)) as {
       open_count: number;
       todos: Array<{ id: string; content: string }>;
@@ -76,7 +76,7 @@ describe("todo tools", () => {
     const config = buildConfig(join(testRoot, "notebook"));
     const writeCall: ToolCall = {
       id: "1",
-      name: "reporter__todo_write",
+      name: "vwork__todo_write",
       input: {
         todos: [
           { id: "a", content: "bad", status: "active", priority: "high" },

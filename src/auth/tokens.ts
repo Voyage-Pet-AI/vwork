@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, existsSync, chmodSync } from "fs";
 import { join } from "path";
-import { getReporterDir } from "../config.js";
+import { getVworkDir } from "../config.js";
 
-const TOKENS_FILE = () => join(getReporterDir(), "tokens.json");
+const TOKENS_FILE = () => join(getVworkDir(), "tokens.json");
 
 export interface SlackTokenData {
   access_token: string;
