@@ -89,6 +89,9 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
   const [connectPopover, setConnectPopover] = useState(false);
   const [modelPopover, setModelPopover] = useState(false);
   const ctrlCTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [draft, setDraft] = useState("");
   const isBusy = status !== "idle";
   const elapsed = useElapsed(activityInfo?.startTime ?? null);
 
@@ -347,7 +350,41 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
       }
     }
 
+    // Push to history if non-empty and not a duplicate of last entry
+    if (trimmed && (history.length === 0 || history[history.length - 1] !== trimmed)) {
+      setHistory(h => [...h, trimmed]);
+    }
+    setHistoryIndex(-1);
+    setDraft("");
+
     onSubmit(trimmed);
+  };
+
+  const onHistoryPrev = () => {
+    if (history.length === 0) return;
+    if (historyIndex === -1) {
+      setDraft(value);
+      const idx = history.length - 1;
+      setHistoryIndex(idx);
+      handleChange(history[idx]);
+    } else if (historyIndex > 0) {
+      const idx = historyIndex - 1;
+      setHistoryIndex(idx);
+      handleChange(history[idx]);
+    }
+  };
+
+  const onHistoryNext = () => {
+    if (historyIndex < 0) return;
+    if (historyIndex < history.length - 1) {
+      const idx = historyIndex + 1;
+      setHistoryIndex(idx);
+      handleChange(history[idx]);
+    } else {
+      // At most recent history entry — restore draft
+      setHistoryIndex(-1);
+      handleChange(draft);
+    }
   };
 
   const placeholder = isBusy
@@ -368,6 +405,8 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
           onSubmit={handleSubmit}
           placeholder={placeholder}
           disableVerticalNav={showPopover}
+          onHistoryPrev={onHistoryPrev}
+          onHistoryNext={onHistoryNext}
         />
       </Box>
       {connectPopover ? (

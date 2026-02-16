@@ -9,6 +9,8 @@ interface MultiLineInputProps {
   placeholder?: string;
   focus?: boolean;
   disableVerticalNav?: boolean;
+  onHistoryPrev?: () => void;
+  onHistoryNext?: () => void;
 }
 
 function cursorPosition(value: string, offset: number): { line: number; col: number } {
@@ -42,6 +44,8 @@ export function MultiLineInput({
   placeholder = "",
   focus = true,
   disableVerticalNav = false,
+  onHistoryPrev,
+  onHistoryNext,
 }: MultiLineInputProps) {
   const [cursorOffset, setCursorOffset] = useState(value.length);
   const cursorManagedRef = useRef(false);
@@ -87,21 +91,42 @@ export function MultiLineInput({
         return;
       }
 
-      // Up arrow — move cursor to previous line
+      // Up arrow — move cursor to previous line, or navigate history
       if (key.upArrow && !disableVerticalNav) {
         const { line, col } = cursorPosition(value, cursorOffset);
         if (line > 0) {
           setCursorOffset(offsetFromPosition(value, line - 1, col));
+        } else if (onHistoryPrev) {
+          onHistoryPrev();
         }
         return;
       }
 
-      // Down arrow — move cursor to next line
+      // Down arrow — move cursor to next line, or navigate history
       if (key.downArrow && !disableVerticalNav) {
         const lines = value.split("\n");
         const { line, col } = cursorPosition(value, cursorOffset);
         if (line < lines.length - 1) {
           setCursorOffset(offsetFromPosition(value, line + 1, col));
+        } else if (onHistoryNext) {
+          onHistoryNext();
+        }
+        return;
+      }
+
+      // Ctrl+U — delete from cursor to beginning of line
+      if (key.ctrl && input === "u") {
+        const { line, col } = cursorPosition(value, cursorOffset);
+        const lineStart = cursorOffset - col;
+        if (col > 0) {
+          cursorManagedRef.current = true;
+          onChange(value.slice(0, lineStart) + value.slice(cursorOffset));
+          setCursorOffset(lineStart);
+        } else if (line > 0) {
+          // Cursor at line start — delete the \n before it (join lines)
+          cursorManagedRef.current = true;
+          onChange(value.slice(0, cursorOffset - 1) + value.slice(cursorOffset));
+          setCursorOffset(cursorOffset - 1);
         }
         return;
       }
