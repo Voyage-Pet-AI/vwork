@@ -22,9 +22,9 @@ function renderTodoLine(prefix: string, todo: AgentTodo): string {
 
 export function TodoStatusLine({ todos }: TodoStatusLineProps) {
   return (
-    <Box>
+    <Box marginTop={1}>
       <Text dimColor>
-        Todos: {todos.active.length} active · {todos.blocked.length} blocked · Ctrl+T expand
+        ─ todo dock · {todos.active.length} active · {todos.blocked.length} blocked · Ctrl+T expand
       </Text>
     </Box>
   );
@@ -34,10 +34,10 @@ export function TodoPanel({ todos }: TodoPanelProps) {
   const open = [...todos.active, ...todos.blocked];
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text bold>Todos</Text>
+    <Box flexDirection="column" marginTop={1}>
+      <Text dimColor>─ todo dock · Ctrl+T minimize</Text>
 
-      <Text>
+      <Text dimColor>
         Active ({todos.active.length})
       </Text>
       {todos.active.length === 0 ? (
@@ -48,7 +48,7 @@ export function TodoPanel({ todos }: TodoPanelProps) {
         ))
       )}
 
-      <Text>
+      <Text dimColor>
         Blocked ({todos.blocked.length})
       </Text>
       {todos.blocked.length === 0 ? (
@@ -59,7 +59,7 @@ export function TodoPanel({ todos }: TodoPanelProps) {
         ))
       )}
 
-      <Text>
+      <Text dimColor>
         Completed Today ({todos.completedToday.length})
       </Text>
       {todos.completedToday.length === 0 ? (
@@ -71,9 +71,8 @@ export function TodoPanel({ todos }: TodoPanelProps) {
       )}
 
       {open.length > 0 && (
-        <Text dimColor>{"Ask naturally (e.g. 'mark no.1 as done')."}</Text>
+        <Text dimColor>{"Tip: ask naturally, e.g. `mark no.1 as done`."}</Text>
       )}
-      <Text dimColor>Ctrl+T minimize</Text>
     </Box>
   );
 }

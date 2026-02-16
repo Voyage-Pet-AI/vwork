@@ -1090,12 +1090,6 @@ function App({ session, config, services, onExit }: AppProps) {
       <CompletedMessages messages={completedMessages} />
       <ActiveMessage message={activeMessage} />
       <QueuedMessages messages={queuedMessages} />
-      {config.todo.enabled &&
-        (todoPanelOpen ? (
-          <TodoPanel todos={todos} />
-        ) : (
-          <TodoStatusLine todos={todos} />
-        ))}
       <ChatInput
         status={status}
         activityInfo={activityInfo}
@@ -1116,6 +1110,12 @@ function App({ session, config, services, onExit }: AppProps) {
         availableProviders={availability.visibleProviders}
         onToggleTodos={() => setTodoPanelOpen((prev) => !prev)}
       />
+      {config.todo.enabled &&
+        (todoPanelOpen ? (
+          <TodoPanel todos={todos} />
+        ) : (
+          <TodoStatusLine todos={todos} />
+        ))}
     </Box>
   );
 }
