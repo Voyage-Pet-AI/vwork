@@ -3,14 +3,7 @@ import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import type { Config } from "../config.js";
-import {
-  addTodo,
-  carryOverFromYesterday,
-  getCurrentTodos,
-  markTodoActive,
-  markTodoBlocked,
-  markTodoDone,
-} from "./manager.js";
+import { carryOverFromYesterday, getCurrentTodos, replaceCurrentTodos } from "./manager.js";
 
 let testRoot = "";
 
@@ -40,7 +33,7 @@ function buildConfig(notebookDir: string): Config {
 }
 
 beforeEach(() => {
-  testRoot = mkdtempSync(join(tmpdir(), "reporter-todo-test-"));
+  testRoot = mkdtempSync(join(tmpdir(), "reporter-todo-manager-test-"));
 });
 
 afterEach(() => {
@@ -48,56 +41,58 @@ afterEach(() => {
 });
 
 describe("todo manager", () => {
-  test("add todo and mark done", () => {
+  test("replaceCurrentTodos persists canonical list", () => {
     const config = buildConfig(join(testRoot, "notebook"));
     const now = new Date("2026-02-16T10:00:00.000Z");
 
-    addTodo(config, "Build todo feature #reporter", [], undefined, now);
-    const done = markTodoDone(config, "build todo", now);
+    const out = replaceCurrentTodos(
+      config,
+      [
+        { id: "1", content: "One", status: "pending", priority: "high" },
+        { id: "2", content: "Two", status: "completed", priority: "medium" },
+      ],
+      now,
+    );
 
-    expect(done.todos.active.length).toBe(0);
-    expect(done.todos.completedToday.length).toBe(1);
-    expect(done.todos.completedToday[0].title).toContain("Build todo feature");
+    expect(out.agentTodos.length).toBe(2);
+    expect(out.todos.active.length).toBe(1);
+    expect(out.todos.completedToday.length).toBe(1);
   });
 
-  test("block and unblock todo", () => {
-    const config = buildConfig(join(testRoot, "notebook"));
-    const now = new Date("2026-02-16T10:00:00.000Z");
-
-    addTodo(config, "Deploy auth service #infra", [], undefined, now);
-    const blocked = markTodoBlocked(config, "1", "waiting on secret", now);
-    expect(blocked.todos.blocked.length).toBe(1);
-    expect(blocked.todos.blocked[0].title).toContain("waiting on secret");
-
-    const active = markTodoActive(config, "1", now);
-    expect(active.todos.blocked.length).toBe(0);
-    expect(active.todos.active.length).toBe(1);
-  });
-
-  test("ambiguous selector returns error", () => {
-    const config = buildConfig(join(testRoot, "notebook"));
-    const now = new Date("2026-02-16T10:00:00.000Z");
-
-    addTodo(config, "Fix auth flow", [], undefined, now);
-    addTodo(config, "Fix auth tests", [], undefined, now);
-
-    expect(() => markTodoDone(config, "fix auth", now)).toThrow(/Ambiguous/);
-  });
-
-  test("carry over open todos from yesterday only", () => {
+  test("carry over copies pending and in_progress only", () => {
     const config = buildConfig(join(testRoot, "notebook"));
     const yesterday = new Date("2026-02-15T10:00:00.000Z");
     const today = new Date("2026-02-16T10:00:00.000Z");
 
-    addTodo(config, "Task one", [], undefined, yesterday);
-    addTodo(config, "Task two", [], undefined, yesterday);
-    markTodoDone(config, "task two", yesterday);
+    replaceCurrentTodos(
+      config,
+      [
+        { id: "a", content: "pending", status: "pending", priority: "medium" },
+        { id: "b", content: "in progress", status: "in_progress", priority: "medium" },
+        { id: "c", content: "cancelled", status: "cancelled", priority: "medium" },
+        { id: "d", content: "completed", status: "completed", priority: "medium" },
+      ],
+      yesterday,
+    );
 
     const result = carryOverFromYesterday(config, today);
-    expect(result.carried).toBe(1);
+    expect(result.carried).toBe(2);
 
-    const current = getCurrentTodos(config, today).todos;
-    expect(current.active.length).toBe(1);
-    expect(current.completedToday.length).toBe(0);
+    const current = getCurrentTodos(config, today).agentTodos;
+    expect(current.length).toBe(2);
+    expect(current.every((t) => t.status === "pending")).toBe(true);
+  });
+
+  test("carry over skips if today already has open todo", () => {
+    const config = buildConfig(join(testRoot, "notebook"));
+    const yesterday = new Date("2026-02-15T10:00:00.000Z");
+    const today = new Date("2026-02-16T10:00:00.000Z");
+
+    replaceCurrentTodos(config, [{ id: "a", content: "old", status: "pending", priority: "medium" }], yesterday);
+    replaceCurrentTodos(config, [{ id: "b", content: "today", status: "in_progress", priority: "medium" }], today);
+
+    const result = carryOverFromYesterday(config, today);
+    expect(result.carried).toBe(0);
+    expect(result.alreadyHadOpenTodos).toBe(true);
   });
 });

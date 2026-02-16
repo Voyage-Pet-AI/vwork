@@ -42,6 +42,12 @@ export function toolCallSummary(tc: ToolCall): string {
       return inp.name ? truncate(String(inp.name)) : "";
     case "reporter__report_list_schedules":
       return "";
+    case "reporter__todo_read":
+      return "";
+    case "reporter__todo_write": {
+      if (Array.isArray(inp.todos)) return `${inp.todos.length} todos`;
+      return "";
+    }
   }
 
   // MCP tools — try common argument names
@@ -68,6 +74,8 @@ const FRIENDLY_NAMES: Record<string, string> = {
   reporter__report_add_schedule: "AddSchedule",
   reporter__report_remove_schedule: "RemoveSchedule",
   reporter__report_update_schedule: "UpdateSchedule",
+  reporter__todo_read: "TodoRead",
+  reporter__todo_write: "TodoWrite",
 };
 
 /** Map raw tool name to a short display name. */
@@ -150,6 +158,17 @@ export function toolResultSummary(toolName: string, result: string, isError?: bo
     case "reporter__report_remove_schedule":
     case "reporter__report_update_schedule":
       return firstLine(result) || "ok";
+    case "reporter__todo_read":
+    case "reporter__todo_write": {
+      try {
+        const parsed = JSON.parse(result) as { open_count?: number; todos?: unknown[] };
+        const total = Array.isArray(parsed.todos) ? parsed.todos.length : 0;
+        const open = typeof parsed.open_count === "number" ? parsed.open_count : 0;
+        return `${open} open / ${total} total`;
+      } catch {
+        return firstLine(result) || "ok";
+      }
+    }
     default: {
       // MCP / unknown: line count or first line
       if (lines > 3) return `${lines} lines`;

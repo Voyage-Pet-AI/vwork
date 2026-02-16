@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import type { TodoList } from "../todo/types.js";
+import type { AgentTodo, TodoList } from "../todo/types.js";
 
 interface TodoPanelProps {
   todos: TodoList;
@@ -9,9 +9,15 @@ interface TodoStatusLineProps {
   todos: TodoList;
 }
 
-function renderTodoLine(prefix: string, title: string, tags: string[]): string {
-  const tagsText = tags.length > 0 ? ` ${tags.map((tag) => `#${tag}`).join(" ")}` : "";
-  return `${prefix} ${title}${tagsText}`;
+function renderStatus(todo: AgentTodo): string {
+  if (todo.status === "in_progress") return "•";
+  if (todo.status === "completed") return "x";
+  return " ";
+}
+
+function renderTodoLine(prefix: string, todo: AgentTodo): string {
+  const pri = todo.priority !== "medium" ? ` [${todo.priority}]` : "";
+  return `${prefix} ${todo.content}${pri}`;
 }
 
 export function TodoStatusLine({ todos }: TodoStatusLineProps) {
@@ -38,7 +44,7 @@ export function TodoPanel({ todos }: TodoPanelProps) {
         <Text dimColor>  - none</Text>
       ) : (
         todos.active.map((todo, idx) => (
-          <Text key={todo.id}>  {renderTodoLine(`[${idx + 1}] [ ]`, todo.title, todo.tags)}</Text>
+          <Text key={todo.id}>  {renderTodoLine(`[${idx + 1}] [${renderStatus(todo)}]`, todo)}</Text>
         ))
       )}
 
@@ -49,7 +55,7 @@ export function TodoPanel({ todos }: TodoPanelProps) {
         <Text dimColor>  - none</Text>
       ) : (
         todos.blocked.map((todo, idx) => (
-          <Text key={todo.id}>  {renderTodoLine(`[${todos.active.length + idx + 1}] [ ]`, todo.title, todo.tags)}</Text>
+          <Text key={todo.id}>  {renderTodoLine(`[${todos.active.length + idx + 1}] [ ]`, todo)}</Text>
         ))
       )}
 
@@ -60,12 +66,12 @@ export function TodoPanel({ todos }: TodoPanelProps) {
         <Text dimColor>  - none</Text>
       ) : (
         todos.completedToday.map((todo) => (
-          <Text key={todo.id}>  {renderTodoLine("[x]", todo.title, todo.tags)}</Text>
+          <Text key={todo.id}>  {renderTodoLine("[x]", todo)}</Text>
         ))
       )}
 
       {open.length > 0 && (
-        <Text dimColor>{"Use `/todo done <index|text>` to complete."}</Text>
+        <Text dimColor>{"Ask naturally (e.g. 'mark no.1 as done')."}</Text>
       )}
       <Text dimColor>Ctrl+T minimize</Text>
     </Box>

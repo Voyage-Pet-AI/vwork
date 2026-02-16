@@ -16,6 +16,7 @@ import {
   reportScheduleTools,
   executeReportScheduleTool,
 } from "./report-schedule.js";
+import { todoTools, executeTodoTool } from "./todo.js";
 import type { ComputerSessionEvent } from "../../computer/types.js";
 
 export interface BuiltinToolContext {
@@ -42,6 +43,7 @@ export function getBuiltinTools(): LLMTool[] {
     ...computerTools,
     ...reporterGenerateReportTools,
     ...reportScheduleTools,
+    ...todoTools,
   ];
 }
 
@@ -93,6 +95,13 @@ export async function executeBuiltinTool(
     case "reporter__report_remove_schedule":
     case "reporter__report_update_schedule":
       return executeReportScheduleTool(tc);
+
+    case "reporter__todo_read":
+    case "reporter__todo_write":
+      if (!context?.config) {
+        throw new Error("todo tools require config context");
+      }
+      return executeTodoTool(tc, context.config);
 
     default:
       throw new Error(`Unknown built-in tool: ${tc.name}`);

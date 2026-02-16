@@ -1,27 +1,23 @@
-export type TodoStatus = "active" | "blocked" | "done";
+export type TodoAgentStatus = "pending" | "in_progress" | "completed" | "cancelled";
 
-export interface Todo {
+export type TodoPriority = "high" | "medium" | "low";
+
+export interface AgentTodo {
   id: string;
-  title: string;
-  tags: string[];
-  status: TodoStatus;
-  description?: string;
-  note?: string;
-  lineNumber?: number;
+  content: string;
+  status: TodoAgentStatus;
+  priority: TodoPriority;
 }
 
 export interface TodoList {
-  active: Todo[];
-  blocked: Todo[];
-  completedToday: Todo[];
+  active: AgentTodo[];
+  blocked: AgentTodo[];
+  completedToday: AgentTodo[];
 }
 
-export interface NotebookMeta {
+export interface ParsedTodoState {
   date: string;
-  path: string;
-}
-
-export interface ParsedNotebook {
-  todos: TodoList;
-  renderedMarkdown: string;
+  todos: AgentTodo[];
+  notebookPath: string;
+  storePath: string;
 }

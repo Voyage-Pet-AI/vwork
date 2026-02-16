@@ -73,7 +73,17 @@ ${sourcesLine}
 - **reporter__report_list_schedules** — List existing report schedules.
 - **reporter__report_add_schedule** — Create a report schedule and install crontab entry.
 - **reporter__report_remove_schedule** — Remove a report schedule and uninstall crontab entry.
-- **reporter__report_update_schedule** — Update report schedule settings (name/prompt/timing).`;
+- **reporter__report_update_schedule** — Update report schedule settings (name/prompt/timing).
+- **reporter__todo_read** — Read the current canonical todo list.
+- **reporter__todo_write** — Replace the canonical todo list with a full updated list.`;
+
+  prompt += `
+
+## Todo Tool Policy
+- For any todo update request (add/update/complete/block/reprioritize), ALWAYS call \`reporter__todo_read\` first.
+- Then call \`reporter__todo_write\` with the FULL updated list; preserve untouched items.
+- Interpret ordinal references like "no.1", "#1", "first" against the read order from \`reporter__todo_read\`.
+- Keep at most one \`in_progress\` todo unless the user explicitly asks otherwise.`;
 
   prompt += `
 

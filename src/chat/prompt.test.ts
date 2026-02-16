@@ -34,6 +34,9 @@ describe("buildChatSystemPrompt", () => {
     );
     expect(prompt).toContain("## Todo Context");
     expect(prompt).toContain("Active: Build feature");
+    expect(prompt).toContain("reporter__todo_read");
+    expect(prompt).toContain("reporter__todo_write");
+    expect(prompt).toContain("ALWAYS call `reporter__todo_read` first");
   });
 
   test("omits todo context when empty", () => {
