@@ -50,6 +50,17 @@ import { createProvider } from "../index.js";
 import type { Config } from "../config.js";
 import { detectReportIntent } from "../chat/report-intent.js";
 import type { ReportKind } from "../report/types.js";
+import type { TodoList } from "../todo/types.js";
+import { TodoPanel } from "./todo-panel.js";
+import {
+  addTodo,
+  carryOverFromYesterday,
+  getCurrentTodos,
+  markTodoActive,
+  markTodoBlocked,
+  markTodoDone,
+} from "../todo/manager.js";
+import { buildTodoContext, getYesterdayDate, loadTodoList } from "../todo/notebook.js";
 
 interface AppProps {
   session: ChatSession;
@@ -62,6 +73,12 @@ let msgCounter = 0;
 function nextId(): string {
   return String(++msgCounter);
 }
+
+const EMPTY_TODOS: TodoList = {
+  active: [],
+  blocked: [],
+  completedToday: [],
+};
 
 /** Helper to append text to the blocks array, merging into the last text block if possible. */
 function appendText(msg: DisplayMessage, delta: string) {
@@ -128,6 +145,10 @@ function App({ session, config, services, onExit }: AppProps) {
   );
   const [status, setStatus] = useState<AppStatus>("idle");
   const [queuedMessages, setQueuedMessages] = useState<DisplayMessage[]>([]);
+  const [todos, setTodos] = useState<TodoList>(EMPTY_TODOS);
+  const [todoPanelOpen, setTodoPanelOpen] = useState(
+    config.todo.default_mode === "full",
+  );
 
   const activeRef = useRef<DisplayMessage | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -138,6 +159,20 @@ function App({ session, config, services, onExit }: AppProps) {
     config,
     session.getProviderName(),
   );
+
+  const syncTodoContext = useCallback(
+    (nextTodos: TodoList) => {
+      session.setTodoContext(buildTodoContext(nextTodos));
+      setTodos(nextTodos);
+    },
+    [session],
+  );
+
+  const refreshTodos = useCallback(() => {
+    if (!config.todo.enabled) return;
+    const parsed = getCurrentTodos(config);
+    syncTodoContext(parsed.todos);
+  }, [config, syncTodoContext]);
 
   const finalizeActive = useCallback(() => {
     if (activeRef.current) {
@@ -158,6 +193,162 @@ function App({ session, config, services, onExit }: AppProps) {
     setActivityInfo(null);
     setStatus("idle");
   }, []);
+
+  const parseQuotedSelector = (input: string): { selector: string; rest: string } => {
+    const trimmed = input.trim();
+    if (!trimmed) return { selector: "", rest: "" };
+    if (!trimmed.startsWith("\"")) return { selector: trimmed, rest: "" };
+    const endQuote = trimmed.indexOf("\"", 1);
+    if (endQuote === -1) return { selector: trimmed.slice(1), rest: "" };
+    return {
+      selector: trimmed.slice(1, endQuote).trim(),
+      rest: trimmed.slice(endQuote + 1).trim(),
+    };
+  };
+
+  const executeTodoSubcommand = useCallback(
+    (subcommand: string, pushSystem: (content: string) => void): boolean => {
+      if (!config.todo.enabled) {
+        pushSystem("Todo feature is disabled in config (`[todo].enabled = false`).");
+        return true;
+      }
+
+      const trimmed = subcommand.trim();
+      if (!trimmed || trimmed === "show" || trimmed === "list") {
+        setTodoPanelOpen(true);
+        refreshTodos();
+        pushSystem("Showing todos.");
+        return true;
+      }
+
+      if (trimmed === "help") {
+        pushSystem(
+          "Todo commands:\n" +
+            "  /todo                    Show todo panel\n" +
+            "  /todo add <title #tags>\n" +
+            "  /todo done <index|text>\n" +
+            "  /todo block <index|text> [reason]\n" +
+            "  /todo unblock <index|text>\n" +
+            'Natural language: `add todo: ...`, `mark \"...\" as done`, `show todos`',
+        );
+        return true;
+      }
+
+      if (trimmed.startsWith("add ")) {
+        const text = trimmed.slice(4).trim();
+        try {
+          const result = addTodo(config, text);
+          syncTodoContext(result.todos);
+          pushSystem(`✅ Added \"${result.added.title}\" to active todos.`);
+        } catch (err) {
+          pushSystem(`Todo add failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return true;
+      }
+
+      if (trimmed.startsWith("done ")) {
+        const selector = trimmed.slice(5).trim();
+        try {
+          const result = markTodoDone(config, selector);
+          syncTodoContext(result.todos);
+          pushSystem(`✅ Marked \"${result.updated.title}\" as completed.`);
+        } catch (err) {
+          pushSystem(`Todo update failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return true;
+      }
+
+      if (trimmed.startsWith("block ")) {
+        const raw = trimmed.slice(6).trim();
+        const { selector, rest } = parseQuotedSelector(raw);
+        const numeric = /^\d+\s+/.test(raw);
+        const note = numeric ? raw.replace(/^\d+\s+/, "").trim() : rest;
+        try {
+          const result = markTodoBlocked(config, selector, note || undefined);
+          syncTodoContext(result.todos);
+          pushSystem(`✅ Marked \"${result.updated.title}\" as blocked.`);
+        } catch (err) {
+          pushSystem(`Todo update failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return true;
+      }
+
+      if (trimmed.startsWith("unblock ")) {
+        const selector = trimmed.slice(8).trim().replace(/^"|"$/g, "");
+        try {
+          const result = markTodoActive(config, selector);
+          syncTodoContext(result.todos);
+          pushSystem(`✅ Marked \"${result.updated.title}\" as active.`);
+        } catch (err) {
+          pushSystem(`Todo update failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return true;
+      }
+
+      pushSystem("Unknown todo command. Use `/todo help`.");
+      return true;
+    },
+    [config, refreshTodos, syncTodoContext],
+  );
+
+  const handleTodoCommand = useCallback(
+    (subcommand: string) => {
+      const pushSystem = (content: string) => {
+        const msg: DisplayMessage = {
+          id: nextId(),
+          role: "assistant",
+          blocks: [{ type: "text", text: content }],
+        };
+        setCompletedMessages((prev) => [...prev, msg]);
+      };
+      executeTodoSubcommand(subcommand, pushSystem);
+    },
+    [executeTodoSubcommand],
+  );
+
+  const interceptTodoText = useCallback(
+    (text: string, pushSystem: (content: string) => void): boolean => {
+      const trimmed = text.trim();
+      if (/^show todos?$/i.test(trimmed) || /^\/todos?$/i.test(trimmed)) {
+        setTodoPanelOpen(true);
+        refreshTodos();
+        pushSystem("Showing todos.");
+        return true;
+      }
+
+      const addMatch = trimmed.match(/^add todo:\s*(.+)$/i);
+      if (addMatch) {
+        try {
+          const result = addTodo(config, addMatch[1]);
+          syncTodoContext(result.todos);
+          pushSystem(`✅ Added \"${result.added.title}\" to active todos.`);
+        } catch (err) {
+          pushSystem(`Todo add failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return true;
+      }
+
+      const doneMatch = trimmed.match(/^mark\s+"?(.+?)"?\s+as\s+done$/i);
+      if (doneMatch) {
+        try {
+          const result = markTodoDone(config, doneMatch[1].trim());
+          syncTodoContext(result.todos);
+          pushSystem(`✅ Marked \"${result.updated.title}\" as completed.`);
+        } catch (err) {
+          pushSystem(`Todo update failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return true;
+      }
+
+      const slashMatch = trimmed.match(/^\/(todo|todos)\b(.*)$/i);
+      if (slashMatch) {
+        return executeTodoSubcommand(slashMatch[2].trim(), pushSystem);
+      }
+
+      return false;
+    },
+    [config, executeTodoSubcommand, refreshTodos, syncTodoContext],
+  );
 
   const processMessage = useCallback(
     async (text: string) => {
@@ -331,6 +522,10 @@ function App({ session, config, services, onExit }: AppProps) {
           };
         });
 
+      if (interceptTodoText(text, pushSystem)) {
+        return;
+      }
+
       const intent = detectReportIntent(text);
       if (intent.matched) {
         let kind: ReportKind;
@@ -397,7 +592,7 @@ function App({ session, config, services, onExit }: AppProps) {
 
       processMessage(enhancedText);
     },
-    [status, processMessage, config, session],
+    [status, processMessage, config, session, interceptTodoText],
   );
 
   const abort = useCallback(() => {
@@ -477,6 +672,7 @@ function App({ session, config, services, onExit }: AppProps) {
             "  /connect                  Switch LLM provider\n" +
             "  /model                    Switch LLM model\n" +
             "  /report                   Manage scheduled reports\n" +
+            "  /todo                     Manage persistent todos\n" +
             "  /copy                     Copy last response to clipboard\n" +
             "  /clear                    Clear conversation history\n" +
             "  /exit                     Exit chat",
@@ -509,6 +705,39 @@ function App({ session, config, services, onExit }: AppProps) {
       };
     });
   }, []);
+
+  useEffect(() => {
+    if (!config.todo.enabled) {
+      session.setTodoContext("");
+      return;
+    }
+
+    const parsed = getCurrentTodos(config);
+    syncTodoContext(parsed.todos);
+
+    if (!config.todo.carryover_prompt) return;
+
+    const openToday = parsed.todos.active.length + parsed.todos.blocked.length;
+    if (openToday > 0) return;
+
+    const yesterday = loadTodoList(config, getYesterdayDate()).todos;
+    const openYesterday = yesterday.active.length + yesterday.blocked.length;
+    if (openYesterday === 0) return;
+
+    (async () => {
+      addSystemMessage(
+        `You have ${openYesterday} open todo(s) from yesterday. Carry over to today? Reply with \"yes\" or \"no\".`,
+      );
+      const reply = (await waitForInput()).toLowerCase();
+      if (reply === "y" || reply === "yes") {
+        const result = carryOverFromYesterday(config);
+        syncTodoContext(result.todos);
+        addSystemMessage(`✅ Carried over ${result.carried} todo(s) from yesterday.`);
+        return;
+      }
+      addSystemMessage("Skipped todo carryover.");
+    })();
+  }, [addSystemMessage, config, session, syncTodoContext, waitForInput]);
 
   useEffect(() => {
     session.setComputerApprovalHandler(async (input) => {
@@ -978,9 +1207,11 @@ function App({ session, config, services, onExit }: AppProps) {
 
   return (
     <Box flexDirection="column">
-      {completedMessages.length === 0 && !activeMessage && (
-        <Header services={services} />
-      )}
+      <Header
+        services={services}
+        todoCounts={{ active: todos.active.length, blocked: todos.blocked.length }}
+      />
+      {todoPanelOpen && <TodoPanel todos={todos} />}
       <CompletedMessages messages={completedMessages} />
       <ActiveMessage message={activeMessage} />
       <QueuedMessages messages={queuedMessages} />
@@ -997,10 +1228,12 @@ function App({ session, config, services, onExit }: AppProps) {
         onCopy={handleCopy}
         onAuth={handleAuth}
         onSchedule={handleSchedule}
+        onTodo={handleTodoCommand}
         onModel={handleModel}
         onConnect={handleConnect}
         authedProviders={availability.visibleProviders}
         availableProviders={availability.visibleProviders}
+        onToggleTodos={() => setTodoPanelOpen((prev) => !prev)}
       />
     </Box>
   );

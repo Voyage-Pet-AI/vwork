@@ -1,6 +1,10 @@
 import type { Config } from "../config.js";
 
-export function buildChatSystemPrompt(config: Config, customServerNames: string[] = []): string {
+export function buildChatSystemPrompt(
+  config: Config,
+  customServerNames: string[] = [],
+  todoContext = "",
+): string {
   const today = new Date().toISOString().split("T")[0];
 
   const enabledSources: string[] = [];
@@ -77,6 +81,10 @@ ${sourcesLine}
 - Prefer reporter__webfetch for static page reading.
 - Use reporter__computer only when interaction is required (buttons, forms, OAuth pages).
 - For web-derived claims, include concise source URLs in the final answer.`;
+
+  if (todoContext.trim()) {
+    prompt += `\n\n## Todo Context\n${todoContext.trim()}`;
+  }
 
   return prompt;
 }

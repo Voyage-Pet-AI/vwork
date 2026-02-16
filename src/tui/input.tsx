@@ -34,6 +34,7 @@ const SLASH_COMMANDS = [
   { name: "connect", description: "Switch LLM provider" },
   { name: "model", description: "Switch LLM model" },
   { name: "report", aliases: ["schedule"], description: "Manage scheduled reports" },
+  { name: "todo", aliases: ["todos"], description: "Manage todos" },
   { name: "copy", description: "Copy last response to clipboard" },
   { name: "clear", description: "Clear conversation history" },
   { name: "exit", aliases: ["quit", "q"], description: "Exit chat" },
@@ -73,13 +74,15 @@ interface ChatInputProps {
   onCopy: () => void;
   onAuth: (subcommand: string) => void | Promise<void>;
   onSchedule: (subcommand: string) => void;
+  onTodo: (subcommand: string) => void;
   onModel: (model: string, provider: string) => void;
   authedProviders: string[];
   availableProviders: string[];
   onConnect: (provider: string) => void | Promise<void>;
+  onToggleTodos: () => void;
 }
 
-export function ChatInput({ status, activityInfo, currentProvider, currentModel, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onAuth, onSchedule, onModel, onConnect, authedProviders, availableProviders }: ChatInputProps) {
+export function ChatInput({ status, activityInfo, currentProvider, currentModel, onSubmit, onAbort, onExit, onClear, onHelp, onCopy, onAuth, onSchedule, onTodo, onModel, onConnect, authedProviders, availableProviders, onToggleTodos }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [ctrlCPending, setCtrlCPending] = useState(false);
@@ -124,6 +127,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
       case "connect": setConnectPopover(true); setSelectedIndex(0); return;
       case "model": setModelPopover(true); setSelectedIndex(0); return;
       case "report": onSchedule(""); return;
+      case "todo": onTodo(""); return;
       case "copy": onCopy(); return;
       case "clear": onClear(); return;
       case "exit": onExit(); return;
@@ -160,6 +164,10 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
           ctrlCTimerRef.current = null;
         }, 2000);
       }
+      return;
+    }
+    if (input.toLowerCase() === "t" && key.ctrl) {
+      onToggleTodos();
       return;
     }
 
@@ -331,6 +339,12 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
         onSchedule(rest);
         return;
       }
+      case "/todo":
+      case "/todos": {
+        const rest = trimmed.replace(/^\/(todo|todos)/, "").trim();
+        onTodo(rest);
+        return;
+      }
     }
 
     onSubmit(trimmed);
@@ -342,7 +356,7 @@ export function ChatInput({ status, activityInfo, currentProvider, currentModel,
 
   const hint = isBusy
     ? "  Enter or Esc to abort · /exit to quit"
-    : "  type / for commands · @ to attach files · Ctrl+J for newline";
+    : "  type / for commands · @ to attach files · Ctrl+T todos · Ctrl+J newline";
 
   return (
     <Box flexDirection="column">

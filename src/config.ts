@@ -38,6 +38,13 @@ export interface ChatConfig {
   report_inbox_replay_limit: number;
 }
 
+export interface TodoConfig {
+  enabled: boolean;
+  notebook_dir: string;
+  default_mode: "minimal" | "full";
+  carryover_prompt: boolean;
+}
+
 export interface ComputerConfig {
   enabled: boolean;
   require_session_approval: boolean;
@@ -61,6 +68,7 @@ export interface Config {
   slack: SlackConfig;
   report: ReportConfig;
   chat: ChatConfig;
+  todo: TodoConfig;
   computer: ComputerConfig;
   memory?: MemoryConfig;
 }
@@ -101,6 +109,27 @@ export function loadConfig(): Config {
   // Resolve ~ in memory.db_path
   if (parsed.memory?.db_path?.startsWith("~")) {
     parsed.memory.db_path = parsed.memory.db_path.replace("~", homedir());
+  }
+
+  if (!parsed.todo) {
+    parsed.todo = {
+      enabled: true,
+      notebook_dir: join(REPORTER_DIR, "notebook"),
+      default_mode: "minimal",
+      carryover_prompt: true,
+    };
+  } else {
+    parsed.todo.enabled = parsed.todo.enabled !== false;
+    parsed.todo.default_mode =
+      parsed.todo.default_mode === "full" ? "full" : "minimal";
+    parsed.todo.carryover_prompt = parsed.todo.carryover_prompt !== false;
+    if (!parsed.todo.notebook_dir) {
+      parsed.todo.notebook_dir = join(REPORTER_DIR, "notebook");
+    }
+  }
+
+  if (parsed.todo.notebook_dir.startsWith("~")) {
+    parsed.todo.notebook_dir = parsed.todo.notebook_dir.replace("~", homedir());
   }
 
   if (!parsed.chat) {
@@ -193,6 +222,16 @@ report_postprocess_enabled = false
 # Number of unread scheduled-run lifecycle messages to replay when chat starts
 report_inbox_replay_limit = 20
 
+[todo]
+# Enable persistent notebook-based todos in chat/TUI
+enabled = true
+# Daily notebook path pattern: <notebook_dir>/YYYY-MM-DD.md
+notebook_dir = "~/reporter/notebook"
+# "minimal" keeps collapsed status badges; "full" opens todo panel by default
+default_mode = "minimal"
+# Prompt to carry over yesterday's open todos if today starts empty
+carryover_prompt = true
+
 [computer]
 # Enable the browser-use computer subagent
 enabled = true
@@ -249,6 +288,7 @@ export interface SlackInitConfig {
 export function initConfig(): string {
   mkdirSync(REPORTER_DIR, { recursive: true });
   mkdirSync(join(REPORTER_DIR, "reports"), { recursive: true });
+  mkdirSync(join(REPORTER_DIR, "notebook"), { recursive: true });
   mkdirSync(join(REPORTER_DIR, "auth"), { recursive: true });
 
   if (existsSync(CONFIG_PATH)) {

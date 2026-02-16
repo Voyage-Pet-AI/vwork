@@ -13,12 +13,12 @@ const MAX_TOOL_ROUNDS = 20;
 
 export class ChatSession {
   private messages: Message[] = [];
-  private systemPrompt: string;
   private tools: LLMTool[];
   private provider: LLMProvider;
   private mcpClient: MCPClientManager;
   private config: Config;
   private customServerNames: string[];
+  private todoContext = "";
   private computerApprovalHandler?: (input: {
     task: string;
     startUrl?: string;
@@ -43,7 +43,14 @@ export class ChatSession {
     const builtinTools = getBuiltinTools();
     this.tools = [...mcpTools, ...builtinTools];
 
-    this.systemPrompt = buildChatSystemPrompt(config, customServerNames);
+  }
+
+  private getSystemPrompt(): string {
+    return buildChatSystemPrompt(
+      this.config,
+      this.customServerNames,
+      this.todoContext,
+    );
   }
 
   /** Clear conversation history. */
@@ -66,6 +73,10 @@ export class ChatSession {
 
   getProviderName(): string {
     return this.provider.providerName;
+  }
+
+  setTodoContext(summary: string): void {
+    this.todoContext = summary.trim();
   }
 
   setComputerApprovalHandler(
@@ -138,7 +149,7 @@ export class ChatSession {
     ].join("\n");
 
     const response = await this.provider.chatStream(
-      this.systemPrompt,
+      this.getSystemPrompt(),
       [{ role: "user", content: prompt }],
       [],
       {
@@ -174,7 +185,7 @@ export class ChatSession {
       let response;
       try {
         response = await this.provider.chatStream(
-          this.systemPrompt,
+          this.getSystemPrompt(),
           this.messages,
           this.tools,
           wrappedCallbacks,

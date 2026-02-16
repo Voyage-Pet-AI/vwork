@@ -64,6 +64,12 @@ const baseConfig: Config = {
   slack: { enabled: false, channels: [] },
   report: { lookback_days: 1, output_dir: "~/reporter/reports", memory_depth: 5 },
   chat: { report_postprocess_enabled: false, report_inbox_replay_limit: 20 },
+  todo: {
+    enabled: true,
+    notebook_dir: "~/reporter/notebook",
+    default_mode: "minimal",
+    carryover_prompt: true,
+  },
   computer: {
     enabled: true,
     require_session_approval: true,
@@ -127,4 +133,3 @@ describe("reporter__computer tool", () => {
     expect(parsed.error_code).toBe("COMPUTER_USE_UNSUPPORTED");
   });
 });
-
