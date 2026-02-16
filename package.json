@@ -4,12 +4,20 @@
   "description": "VWork — AI-powered work assistant for everyone",
   "type": "module",
   "bin": {
-    "vwork": "src/index.ts"
+    "vwork": "dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "start": "bun src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun --external react-devtools-core",
-    "link": "bun link",
+    "link": "bun run build && bun link",
+    "prepublishOnly": "bun run build",
     "publish": "bash scripts/publish.sh"
   },
   "dependencies": {

@@ -68,7 +68,17 @@ Claude / GPT API
 ## Install
 
 ```bash
+# via npm (requires Bun runtime)
+npm install -g vwork
+
+# or via Homebrew
+brew install riricardoMa/tap/vwork
+
+# or from source
+git clone https://github.com/boxiangma/vwork.git
+cd vwork
 bun install
+bun link
 ```
 
 ## Setup
