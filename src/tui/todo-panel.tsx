@@ -5,16 +5,30 @@ interface TodoPanelProps {
   todos: TodoList;
 }
 
+interface TodoStatusLineProps {
+  todos: TodoList;
+}
+
 function renderTodoLine(prefix: string, title: string, tags: string[]): string {
   const tagsText = tags.length > 0 ? ` ${tags.map((tag) => `#${tag}`).join(" ")}` : "";
   return `${prefix} ${title}${tagsText}`;
+}
+
+export function TodoStatusLine({ todos }: TodoStatusLineProps) {
+  return (
+    <Box>
+      <Text dimColor>
+        Todos: {todos.active.length} active · {todos.blocked.length} blocked · Ctrl+T expand
+      </Text>
+    </Box>
+  );
 }
 
 export function TodoPanel({ todos }: TodoPanelProps) {
   const open = [...todos.active, ...todos.blocked];
 
   return (
-    <Box flexDirection="column" borderStyle="round" paddingLeft={1} paddingRight={1} marginBottom={1}>
+    <Box flexDirection="column" marginBottom={1}>
       <Text bold>Todos</Text>
 
       <Text>
@@ -53,7 +67,7 @@ export function TodoPanel({ todos }: TodoPanelProps) {
       {open.length > 0 && (
         <Text dimColor>{"Use `/todo done <index|text>` to complete."}</Text>
       )}
-      <Text dimColor>Press Ctrl+T to minimize.</Text>
+      <Text dimColor>Ctrl+T minimize</Text>
     </Box>
   );
 }

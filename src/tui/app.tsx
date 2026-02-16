@@ -51,7 +51,7 @@ import type { Config } from "../config.js";
 import { detectReportIntent } from "../chat/report-intent.js";
 import type { ReportKind } from "../report/types.js";
 import type { TodoList } from "../todo/types.js";
-import { TodoPanel } from "./todo-panel.js";
+import { TodoPanel, TodoStatusLine } from "./todo-panel.js";
 import {
   addTodo,
   carryOverFromYesterday,
@@ -1207,14 +1207,16 @@ function App({ session, config, services, onExit }: AppProps) {
 
   return (
     <Box flexDirection="column">
-      <Header
-        services={services}
-        todoCounts={{ active: todos.active.length, blocked: todos.blocked.length }}
-      />
-      {todoPanelOpen && <TodoPanel todos={todos} />}
+      <Header services={services} />
       <CompletedMessages messages={completedMessages} />
       <ActiveMessage message={activeMessage} />
       <QueuedMessages messages={queuedMessages} />
+      {config.todo.enabled &&
+        (todoPanelOpen ? (
+          <TodoPanel todos={todos} />
+        ) : (
+          <TodoStatusLine todos={todos} />
+        ))}
       <ChatInput
         status={status}
         activityInfo={activityInfo}
