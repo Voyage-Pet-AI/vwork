@@ -1,6 +1,6 @@
 {
   "name": "vwork",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "VWork — AI-powered work assistant for everyone",
   "type": "module",
   "bin": {
