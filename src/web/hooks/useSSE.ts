@@ -10,6 +10,14 @@ interface SSEHandlers {
   onUserMessage?: (data: { message: string }) => void;
 }
 
+function safeParse(raw: string): { ok: true; value: any } | { ok: false; error: string } {
+  try {
+    return { ok: true, value: JSON.parse(raw) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export function useSSE(url: string, handlers: SSEHandlers) {
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
@@ -18,15 +26,21 @@ export function useSSE(url: string, handlers: SSEHandlers) {
     const source = new EventSource(url);
 
     source.addEventListener("text", (e) => {
-      handlersRef.current.onText?.(JSON.parse(e.data));
+      const result = safeParse(e.data);
+      if (result.ok) handlersRef.current.onText?.(result.value);
+      else handlersRef.current.onError?.({ message: `Parse error: ${result.error}` });
     });
 
     source.addEventListener("tool_start", (e) => {
-      handlersRef.current.onToolStart?.(JSON.parse(e.data));
+      const result = safeParse(e.data);
+      if (result.ok) handlersRef.current.onToolStart?.(result.value);
+      else handlersRef.current.onError?.({ message: `Parse error: ${result.error}` });
     });
 
     source.addEventListener("tool_end", (e) => {
-      handlersRef.current.onToolEnd?.(JSON.parse(e.data));
+      const result = safeParse(e.data);
+      if (result.ok) handlersRef.current.onToolEnd?.(result.value);
+      else handlersRef.current.onError?.({ message: `Parse error: ${result.error}` });
     });
 
     source.addEventListener("complete", () => {
@@ -34,18 +48,23 @@ export function useSSE(url: string, handlers: SSEHandlers) {
     });
 
     source.addEventListener("error", (e) => {
-      // SSE connection error vs server error event
       if (e instanceof MessageEvent) {
-        handlersRef.current.onError?.(JSON.parse(e.data));
+        const result = safeParse(e.data);
+        if (result.ok) handlersRef.current.onError?.(result.value);
+        else handlersRef.current.onError?.({ message: `Parse error: ${result.error}` });
       }
     });
 
     source.addEventListener("status", (e) => {
-      handlersRef.current.onStatus?.(JSON.parse(e.data));
+      const result = safeParse(e.data);
+      if (result.ok) handlersRef.current.onStatus?.(result.value);
+      else handlersRef.current.onError?.({ message: `Parse error: ${result.error}` });
     });
 
     source.addEventListener("user_message", (e) => {
-      handlersRef.current.onUserMessage?.(JSON.parse(e.data));
+      const result = safeParse(e.data);
+      if (result.ok) handlersRef.current.onUserMessage?.(result.value);
+      else handlersRef.current.onError?.({ message: `Parse error: ${result.error}` });
     });
 
     return source;

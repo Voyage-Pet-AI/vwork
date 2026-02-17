@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { AgentTodo } from "../lib/types.js";
 import { getTodos, saveTodos } from "../lib/api.js";
 
 export function useTodos() {
   const [todos, setTodos] = useState<AgentTodo[]>([]);
   const [loading, setLoading] = useState(true);
+  const todosRef = useRef(todos);
+  todosRef.current = todos;
 
   const refresh = useCallback(async () => {
     try {
@@ -32,14 +34,14 @@ export function useTodos() {
 
   const toggleTodo = useCallback(
     (id: string) => {
-      const updated = todos.map((t) =>
+      const updated = todosRef.current.map((t) =>
         t.id === id
           ? { ...t, status: t.status === "completed" ? ("pending" as const) : ("completed" as const) }
           : t
       );
       save(updated);
     },
-    [todos, save]
+    [save]
   );
 
   const addTodo = useCallback(
@@ -50,16 +52,16 @@ export function useTodos() {
         status: "pending",
         priority: "medium",
       };
-      save([...todos, newTodo]);
+      save([...todosRef.current, newTodo]);
     },
-    [todos, save]
+    [save]
   );
 
   const removeTodo = useCallback(
     (id: string) => {
-      save(todos.filter((t) => t.id !== id));
+      save(todosRef.current.filter((t) => t.id !== id));
     },
-    [todos, save]
+    [save]
   );
 
   return { todos, loading, refresh, toggleTodo, addTodo, removeTodo };

@@ -67,7 +67,12 @@ export function chatRoutes(state: ChatState) {
   });
 
   app.post("/send", async (c) => {
-    const body = await c.req.json<{ message: string }>();
+    let body: { message?: string };
+    try {
+      body = await c.req.json<{ message: string }>();
+    } catch {
+      return c.json({ error: "Invalid JSON" }, 400);
+    }
     const message = body.message?.trim();
     if (!message) {
       return c.json({ error: "message is required" }, 400);
@@ -121,9 +126,14 @@ export function chatRoutes(state: ChatState) {
         const msg = err instanceof Error ? err.message : String(err);
         broadcast("error", JSON.stringify({ message: msg }));
       } finally {
-        broadcast("complete", "{}");
-        setStatus("idle");
-        state.abortController = null;
+        // If abortController is null, the /abort endpoint already
+        // broadcast "complete" and set status to "idle" — skip to
+        // avoid duplicate events.
+        if (state.abortController) {
+          broadcast("complete", "{}");
+          setStatus("idle");
+          state.abortController = null;
+        }
       }
     })();
 

@@ -106,10 +106,23 @@ export function useChat() {
     },
 
     onError: (data) => {
-      updateActive((m) => ({
-        ...m,
-        blocks: [...m.blocks, { type: "text", text: `\n\nError: ${data.message}` }],
-      }));
+      const errorBlock: ContentBlock = { type: "text", text: `\n\nError: ${data.message}` };
+      setActiveMessage((prev) => {
+        if (!prev) {
+          // No active assistant message — append a standalone error message
+          const errMsg: DisplayMessage = {
+            id: nextId(),
+            role: "assistant",
+            blocks: [errorBlock],
+          };
+          setMessages((msgs) => [...msgs, errMsg]);
+          activeRef.current = null;
+          return null;
+        }
+        const next = { ...prev, blocks: [...prev.blocks, errorBlock] };
+        activeRef.current = next;
+        return next;
+      });
     },
 
     onStatus: (data) => {
@@ -151,10 +164,12 @@ export function useChat() {
 
   const clear = useCallback(async () => {
     try {
+      await abortChat();
       await clearChat();
       setMessages([]);
       setActiveMessage(null);
       activeRef.current = null;
+      setStatus("idle");
     } catch {
       // best effort
     }

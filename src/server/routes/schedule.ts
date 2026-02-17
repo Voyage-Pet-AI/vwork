@@ -10,6 +10,14 @@ export function scheduleRoutes() {
 
   app.post("/", async (c) => {
     const body = await c.req.json<Omit<Schedule, "createdAt">>();
+
+    const missing = (["name", "cron", "prompt"] as const).filter(
+      (k) => typeof body[k] !== "string" || body[k].trim().length === 0,
+    );
+    if (missing.length > 0) {
+      return c.json({ error: `Missing required fields: ${missing.join(", ")}` }, 400);
+    }
+
     const schedule: Schedule = {
       ...body,
       createdAt: new Date().toISOString(),

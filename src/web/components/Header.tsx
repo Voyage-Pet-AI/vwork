@@ -25,9 +25,9 @@ export function Header() {
         )}
       </div>
       <div className="flex items-center gap-2">
-        {servers.map((s) => (
+        {servers.map((s, index) => (
           <span
-            key={s}
+            key={`${s}-${index}`}
             className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded"
           >
             {s}

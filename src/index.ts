@@ -480,7 +480,12 @@ async function cmdServe() {
 
   const config = loadConfig();
   const portArg = args.indexOf("--port");
-  const port = portArg !== -1 ? parseInt(args[portArg + 1], 10) : undefined;
+  let port: number | undefined;
+  if (portArg !== -1) {
+    const raw = args[portArg + 1];
+    const parsed = raw != null && !raw.startsWith("-") ? parseInt(raw, 10) : NaN;
+    port = Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : undefined;
+  }
 
   const servers: ReturnType<typeof getEnabledServers> = [];
   let customServerNames: string[] = [];

@@ -12,8 +12,11 @@ export function todoRoutes(config: Config) {
   });
 
   app.post("/", async (c) => {
-    const body = await c.req.json<{ todos: AgentTodo[] }>();
-    const { todos, agentTodos } = replaceCurrentTodos(config, body.todos);
+    const body = await c.req.json().catch(() => null);
+    if (!body || !Array.isArray(body.todos)) {
+      return c.json({ error: "body.todos must be an array" }, 400);
+    }
+    const { todos, agentTodos } = replaceCurrentTodos(config, body.todos as AgentTodo[]);
     return c.json({ todos, agentTodos });
   });
 

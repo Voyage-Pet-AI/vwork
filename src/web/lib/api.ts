@@ -47,7 +47,7 @@ export function getReportHistory() {
 }
 
 export function getReport(filename: string) {
-  return fetchJSON<{ filename: string; content: string }>(`/report/${filename}`);
+  return fetchJSON<{ filename: string; content: string }>(`/report/${encodeURIComponent(filename)}`);
 }
 
 // Todos
@@ -68,7 +68,7 @@ export function getAuthStatus() {
 }
 
 export function logoutService(service: string) {
-  return fetchJSON<{ ok: boolean }>(`/auth/logout/${service}`, { method: "POST" });
+  return fetchJSON<{ ok: boolean }>(`/auth/logout/${encodeURIComponent(service)}`, { method: "POST" });
 }
 
 // Schedules
@@ -84,7 +84,7 @@ export function addSchedule(schedule: { name: string; cron: string; prompt: stri
 }
 
 export function deleteSchedule(name: string) {
-  return fetchJSON<{ ok: boolean }>(`/schedule/${name}`, { method: "DELETE" });
+  return fetchJSON<{ ok: boolean }>(`/schedule/${encodeURIComponent(name)}`, { method: "DELETE" });
 }
 
 // Config

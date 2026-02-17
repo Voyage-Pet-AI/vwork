@@ -4,7 +4,7 @@ import { Sidebar, type View } from "./components/Sidebar.js";
 import { ChatView } from "./components/ChatView.js";
 import { ReportHistory } from "./components/ReportHistory.js";
 import { TodoPanel } from "./components/TodoPanel.js";
-import { SettingsPanel } from "./components/AuthStatus.js";
+import { SettingsPanel } from "./components/SettingsPanel.js";
 
 export function App() {
   const [view, setView] = useState<View>("chat");

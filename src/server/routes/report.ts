@@ -37,7 +37,7 @@ export function reportRoutes(opts: ReportRouteOptions) {
           kind,
           lookbackDays,
           prompt,
-          source: "cli",
+          source: "web",
           save: true,
         },
         {
