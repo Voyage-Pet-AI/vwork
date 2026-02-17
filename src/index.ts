@@ -57,7 +57,7 @@ export function createProvider(config: Config): LLMProvider {
   }
 }
 
-const VERSION = "0.1.3";
+const VERSION = "0.1.4";
 
 const args = process.argv.slice(2);
 const command = args[0] ?? "chat";
