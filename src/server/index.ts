@@ -43,8 +43,10 @@ export async function startWebServer(opts: StartWebServerOptions): Promise<void>
 
   const app = new Hono();
 
-  // CORS for Vite dev server
-  app.use("/api/*", cors({ origin: "*" }));
+  // CORS for Vite dev server (dev only; production serves from same origin)
+  if (process.env.NODE_ENV === "development") {
+    app.use("/api/*", cors({ origin: "http://localhost:5173" }));
+  }
 
   // API routes
   app.route("/api/chat", chatRoutes(chatState));
@@ -68,6 +70,7 @@ export async function startWebServer(opts: StartWebServerOptions): Promise<void>
 
   const server = Bun.serve({
     port,
+    hostname: "127.0.0.1",
     fetch: app.fetch,
   });
 

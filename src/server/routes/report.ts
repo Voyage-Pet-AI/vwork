@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 import { homedir } from "os";
 import type { Config } from "../../config.js";
 import type { LLMProvider } from "../../llm/provider.js";
@@ -70,6 +70,11 @@ export function reportRoutes(opts: ReportRouteOptions) {
     const filename = c.req.param("filename");
     const dir = opts.config.report.output_dir.replace("~", homedir());
     const filePath = join(dir, filename.endsWith(".md") ? filename : `${filename}.md`);
+    const resolvedDir = resolve(dir);
+
+    if (!resolve(filePath).startsWith(resolvedDir + "/")) {
+      return c.json({ error: "Invalid filename" }, 400);
+    }
 
     if (!existsSync(filePath)) {
       return c.json({ error: "Report not found" }, 404);
