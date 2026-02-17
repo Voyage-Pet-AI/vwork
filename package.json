@@ -1,6 +1,6 @@
 {
   "name": "vwork",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "VWork — AI-powered work assistant for everyone",
   "type": "module",
   "bin": {
@@ -21,8 +21,7 @@
     "dev:server": "bun --watch src/index.ts serve",
     "dev:web": "vite --config src/web/vite.config.ts",
     "link": "bun run build && bun link",
-    "prepublishOnly": "bun run build",
-    "publish": "bash scripts/publish.sh"
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
