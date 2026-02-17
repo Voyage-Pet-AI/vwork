@@ -39,8 +39,10 @@ import { MCP_CATALOG, type CatalogEntry } from "./mcp/catalog.js";
 import { multiselect, cancelSymbol, type MultiselectItem } from "./prompts/multiselect.js";
 import { select } from "./prompts/select.js";
 import pc from "picocolors";
-import { ChatSession } from "./chat/session.js";
-import { startTUI } from "./tui/app.js";
+// Dynamic imports — ink/react-reconciler requires React 18 internals,
+// so only import TUI modules when the chat command is actually used.
+// import { ChatSession } from "./chat/session.js";
+// import { startTUI } from "./tui/app.js";
 import { startWebServer } from "./server/index.js";
 import { log, error } from "./utils/log.js";
 import { readLine } from "./utils/readline.js";
@@ -458,10 +460,12 @@ async function cmdChat() {
     }
 
     const provider = createProvider(config);
+    const { ChatSession } = await import("./chat/session.js");
     const session = new ChatSession(provider, mcpClient, config, customServerNames);
 
     // Build services list for TUI header
     const services = servers.map((s) => ({ name: s.name.charAt(0).toUpperCase() + s.name.slice(1) }));
+    const { startTUI } = await import("./tui/app.js");
     await startTUI({ session, config, services });
   } finally {
     await mcpClient.disconnect();
