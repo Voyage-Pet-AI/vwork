@@ -1,3 +1,4 @@
+use std::process::{Command, Child};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -7,30 +8,24 @@ use tauri::{
     AppHandle, Manager, RunEvent, WindowEvent,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
-use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandChild;
 
 /// Port the sidecar server runs on.
 const DEFAULT_PORT: u16 = 3141;
 
 /// State holding the sidecar child process so we can kill it on exit.
-struct SidecarState(Mutex<Option<CommandChild>>);
+struct SidecarState(Mutex<Option<Child>>);
 
-/// Wait for the VWork HTTP server to become ready by polling its config endpoint.
+/// Wait for the VWork HTTP server to become ready by polling TCP.
 fn wait_for_server(port: u16, timeout: Duration) -> Result<(), String> {
-    let url = format!("http://127.0.0.1:{}/api/config", port);
     let start = std::time::Instant::now();
     let poll_interval = Duration::from_millis(200);
 
     while start.elapsed() < timeout {
-        // Use a simple TCP connect check instead of full HTTP to avoid pulling in
-        // a blocking HTTP client at this stage.
         if let Ok(stream) = std::net::TcpStream::connect_timeout(
             &format!("127.0.0.1:{}", port).parse().unwrap(),
             Duration::from_secs(1),
         ) {
             drop(stream);
-            // Server is accepting connections — give it a moment to finish init
             std::thread::sleep(Duration::from_millis(300));
             return Ok(());
         }
@@ -38,48 +33,49 @@ fn wait_for_server(port: u16, timeout: Duration) -> Result<(), String> {
     }
 
     Err(format!(
-        "VWork server did not start within {}s (tried {})",
+        "VWork server did not start within {}s",
         timeout.as_secs(),
-        url
     ))
 }
 
-/// Spawn the VWork sidecar binary.
-fn spawn_sidecar(app: &AppHandle) -> Result<CommandChild, String> {
-    let shell = app.shell();
-    let command = shell
-        .sidecar("binaries/vwork-server")
-        .map_err(|e| format!("Failed to create sidecar command: {}", e))?
-        .args(["serve", "--port", &DEFAULT_PORT.to_string()]);
+/// Find the sidecar binary path. It lives next to the main executable.
+fn find_sidecar() -> Result<std::path::PathBuf, String> {
+    let exe = std::env::current_exe()
+        .map_err(|e| format!("Cannot find current exe: {}", e))?;
+    let exe_dir = exe.parent().ok_or("Cannot find exe directory")?;
 
-    let (mut rx, child) = command
+    // In the .app bundle: Contents/MacOS/vwork-server
+    let sidecar = exe_dir.join("vwork-server");
+    if sidecar.exists() {
+        return Ok(sidecar);
+    }
+
+    // In dev: src-tauri/binaries/vwork-server-{triple}
+    let target_triple = env!("TAURI_ENV_TARGET_TRIPLE");
+    let dev_sidecar = exe_dir
+        .join("../../binaries")
+        .join(format!("vwork-server-{}", target_triple));
+    if dev_sidecar.exists() {
+        return Ok(dev_sidecar);
+    }
+
+    Err(format!(
+        "Sidecar not found at {:?} or {:?}",
+        sidecar, dev_sidecar
+    ))
+}
+
+/// Spawn the VWork sidecar binary using std::process::Command.
+fn spawn_sidecar() -> Result<Child, String> {
+    let sidecar_path = find_sidecar()?;
+    eprintln!("[vwork] Sidecar path: {:?}", sidecar_path);
+
+    let child = Command::new(&sidecar_path)
+        .args(["serve", "--port", &DEFAULT_PORT.to_string()])
+        .stderr(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
         .spawn()
-        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
-
-    // Forward sidecar stderr to our stderr for debugging
-    tauri::async_runtime::spawn(async move {
-        use tauri_plugin_shell::process::CommandEvent;
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stderr(line) => {
-                    let text = String::from_utf8_lossy(&line);
-                    eprint!("{}", text);
-                }
-                CommandEvent::Stdout(line) => {
-                    let text = String::from_utf8_lossy(&line);
-                    eprint!("[sidecar stdout] {}", text);
-                }
-                CommandEvent::Error(err) => {
-                    eprintln!("[sidecar error] {}", err);
-                }
-                CommandEvent::Terminated(status) => {
-                    eprintln!("[sidecar] process exited: {:?}", status);
-                    break;
-                }
-                _ => {}
-            }
-        }
-    });
+        .map_err(|e| format!("Failed to spawn {:?}: {}", sidecar_path, e))?;
 
     Ok(child)
 }
@@ -87,8 +83,9 @@ fn spawn_sidecar(app: &AppHandle) -> Result<CommandChild, String> {
 /// Kill the sidecar process gracefully.
 fn kill_sidecar(state: &SidecarState) {
     if let Ok(mut guard) = state.0.lock() {
-        if let Some(child) = guard.take() {
+        if let Some(mut child) = guard.take() {
             let _ = child.kill();
+            let _ = child.wait();
         }
     }
 }
@@ -149,7 +146,6 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 "quit" => {
-                    // Kill sidecar before quitting
                     if let Some(state) = app.try_state::<SidecarState>() {
                         kill_sidecar(&state);
                     }
@@ -175,7 +171,6 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         })
         .build(&app_handle)?;
 
-    // Set up macOS native menu bar
     setup_native_menu(&app_handle2)?;
 
     Ok(())
@@ -220,7 +215,6 @@ fn setup_native_menu(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> 
 
 /// Trigger report generation via the sidecar's HTTP API and show a notification.
 async fn trigger_report(app: &AppHandle) {
-    // Fire-and-forget POST to the sidecar
     let url = format!("http://127.0.0.1:{}/api/report/run", DEFAULT_PORT);
 
     let result: Result<(), String> = async {
@@ -285,26 +279,23 @@ pub fn run() {
 
             // Spawn the VWork sidecar server
             eprintln!("[vwork] Starting sidecar on port {}...", DEFAULT_PORT);
-            match spawn_sidecar(&handle) {
+            match spawn_sidecar() {
                 Ok(child) => {
-                    // Store the child so we can kill it later
                     let state = handle.state::<SidecarState>();
                     *state.0.lock().unwrap() = Some(child);
                     eprintln!("[vwork] Sidecar spawned, waiting for server...");
                 }
                 Err(e) => {
-                    eprintln!("[vwork] Failed to spawn sidecar: {}", e);
-                    // Continue anyway — user can still use the app if server starts separately
+                    eprintln!("[vwork] {}", e);
                 }
             }
 
-            // Wait for server in a background thread, then load the URL
+            // Wait for server in a background thread, then navigate the webview
             let handle2 = handle.clone();
             std::thread::spawn(move || {
                 match wait_for_server(DEFAULT_PORT, Duration::from_secs(15)) {
                     Ok(()) => {
                         eprintln!("[vwork] Server is ready!");
-                        // Navigate the webview to the server URL
                         if let Some(w) = handle2.get_webview_window("main") {
                             let url = format!("http://localhost:{}", DEFAULT_PORT);
                             let _ = w.navigate(url.parse().unwrap());
@@ -322,7 +313,6 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Hide window instead of closing on macOS (Cmd+W)
             if let WindowEvent::CloseRequested { api, .. } = event {
                 #[cfg(target_os = "macos")]
                 {
@@ -335,7 +325,6 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| {
             if let RunEvent::ExitRequested { .. } = event {
-                // Kill sidecar on exit
                 if let Some(state) = app.try_state::<SidecarState>() {
                     kill_sidecar(&state);
                 }

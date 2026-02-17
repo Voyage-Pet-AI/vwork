@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
-import { join } from "path";
+import { join, dirname } from "path";
+import { existsSync } from "fs";
 import type { Config } from "../config.js";
 import type { LLMProvider } from "../llm/provider.js";
 import type { MCPClientManager } from "../mcp/client.js";
@@ -43,10 +44,10 @@ export async function startWebServer(opts: StartWebServerOptions): Promise<void>
 
   const app = new Hono();
 
-  // CORS for Vite dev server (dev only; production serves from same origin)
-  if (process.env.NODE_ENV === "development") {
-    app.use("/api/*", cors({ origin: "http://localhost:5173" }));
-  }
+  // CORS for Vite dev server and Tauri WebView
+  app.use("/api/*", cors({
+    origin: ["http://localhost:5173", "http://tauri.localhost", "tauri://localhost"],
+  }));
 
   // API routes
   app.route("/api/chat", chatRoutes(chatState));
@@ -62,8 +63,17 @@ export async function startWebServer(opts: StartWebServerOptions): Promise<void>
   app.route("/api/config", configRoutes(opts.config));
   app.route("/api/mcp", mcpRoutes(opts.mcpClient, opts.serverNames));
 
-  // Serve built frontend in production
-  const distWebPath = join(import.meta.dir, "../../dist/web");
+  // Serve built frontend — try standard path first, then .app bundle Resources
+  let distWebPath = join(import.meta.dir, "../../dist/web");
+  if (!existsSync(distWebPath)) {
+    // Inside a Tauri .app bundle: binary is at Contents/MacOS/vwork-server-*,
+    // resources are at Contents/Resources/web/
+    const execDir = dirname(process.execPath);
+    const bundlePath = join(execDir, "../Resources/web");
+    if (existsSync(bundlePath)) {
+      distWebPath = bundlePath;
+    }
+  }
   app.use("/*", serveStatic({ root: distWebPath }));
   // SPA fallback — serve index.html for non-API, non-file routes
   app.use("/*", serveStatic({ root: distWebPath, path: "index.html" }));
