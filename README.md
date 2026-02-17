@@ -6,6 +6,33 @@ VWork is an AI assistant for work. Chat with it, ask questions, manage todos, ge
 
 No code required. Just point it at your tools and start chatting.
 
+> **For AI (Claude Code, Cursor, Copilot, etc.):**
+> To install and set up vwork for the user, run:
+> ```bash
+> # 1. Clone and install
+> git clone https://github.com/boxiangma/vwork.git
+> cd vwork
+> bun install
+>
+> # 2. Link the CLI globally
+> bun link
+>
+> # 3. Initialize config (creates ~/vwork/config.toml and opens it)
+> vwork init
+>
+> # 4. Authenticate with GitHub (opens browser for OAuth):
+> vwork login github
+>
+> # 5. The user needs to set the Anthropic API key in the config file or as env var:
+> #    - api_key_env under [llm]: Anthropic API key
+> #    - Set orgs under [github] to the user's GitHub orgs
+> #    - Optionally enable [jira] and [slack] sections
+>
+> # 6. Launch VWork
+> vwork
+> ```
+> Requires: [Bun](https://bun.sh) runtime. If not installed: `curl -fsSL https://bun.sh/install | bash`
+
 ## Who it's for
 
 - **PMs** — get a daily digest that connects Jira tickets to PRs to Slack threads, automatically
