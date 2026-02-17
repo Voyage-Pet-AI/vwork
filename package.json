@@ -21,7 +21,10 @@
     "dev:server": "bun --watch src/index.ts serve",
     "dev:web": "vite --config src/web/vite.config.ts",
     "link": "bun run build && bun link",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build",
+    "build:sidecar": "bun build --compile src/index.ts --outfile src-tauri/binaries/vwork-server-$(rustc -vV | grep host | cut -d' ' -f2)",
+    "dev:tauri": "cargo tauri dev",
+    "build:tauri": "bun run build:web && bun run build:sidecar && cargo tauri build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",

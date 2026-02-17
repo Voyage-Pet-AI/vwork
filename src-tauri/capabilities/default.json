@@ -1,0 +1,31 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for VWork",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "args": true,
+          "name": "binaries/vwork-server",
+          "sidecar": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "args": true,
+          "name": "binaries/vwork-server",
+          "sidecar": true
+        }
+      ]
+    },
+    "shell:allow-stdin-write",
+    "notification:default",
+    "autostart:default"
+  ]
+}
