@@ -23,7 +23,7 @@ export function chatRoutes(state: ChatState) {
 
   function broadcast(event: string, data: string) {
     for (const client of state.sseClients) {
-      client.write(event, data);
+      void client.write(event, data);
     }
   }
 
@@ -107,28 +107,21 @@ export function chatRoutes(state: ChatState) {
           }));
         },
         onComplete: () => {
-          broadcast("complete", "{}");
-          setStatus("idle");
-          state.abortController = null;
+          // Ignore — chatStream() calls this after each round, but we only
+          // want to signal "complete" after the entire send() finishes.
         },
         onError: (err: Error) => {
           broadcast("error", JSON.stringify({ message: err.message }));
-          setStatus("idle");
-          state.abortController = null;
         },
       };
 
       try {
         await state.session.send(message, callbacks, controller.signal);
-        // Ensure idle if send() completed without calling onComplete (e.g. abort)
-        if (state.status !== "idle") {
-          broadcast("complete", "{}");
-          setStatus("idle");
-          state.abortController = null;
-        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         broadcast("error", JSON.stringify({ message: msg }));
+      } finally {
+        broadcast("complete", "{}");
         setStatus("idle");
         state.abortController = null;
       }

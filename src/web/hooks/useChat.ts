@@ -15,17 +15,20 @@ export function useChat() {
   const activeRef = useRef(activeMessage);
   activeRef.current = activeMessage;
 
-  const ensureActiveMessage = useCallback((): DisplayMessage => {
-    if (activeRef.current) return activeRef.current;
+  const ensureActiveMessage = useCallback((): void => {
+    if (activeRef.current) return;
     const msg: DisplayMessage = { id: nextId(), role: "assistant", blocks: [] };
     activeRef.current = msg;
     setActiveMessage(msg);
-    return msg;
   }, []);
 
   const updateActive = useCallback((updater: (msg: DisplayMessage) => DisplayMessage) => {
     setActiveMessage((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        // Already completed — keep null and sync ref
+        activeRef.current = null;
+        return null;
+      }
       const next = updater(prev);
       activeRef.current = next;
       return next;
@@ -34,21 +37,16 @@ export function useChat() {
 
   useSSE("/api/chat/events", {
     onText: (data) => {
-      const msg = ensureActiveMessage();
-      const lastBlock = msg.blocks[msg.blocks.length - 1];
-      if (lastBlock?.type === "text") {
-        updateActive((m) => {
+      ensureActiveMessage();
+      updateActive((m) => {
+        const lastBlock = m.blocks[m.blocks.length - 1];
+        if (lastBlock?.type === "text") {
           const blocks = [...m.blocks];
-          const last = blocks[blocks.length - 1] as { type: "text"; text: string };
-          blocks[blocks.length - 1] = { type: "text", text: last.text + data.delta };
+          blocks[blocks.length - 1] = { type: "text", text: lastBlock.text + data.delta };
           return { ...m, blocks };
-        });
-      } else {
-        updateActive((m) => ({
-          ...m,
-          blocks: [...m.blocks, { type: "text", text: data.delta }],
-        }));
-      }
+        }
+        return { ...m, blocks: [...m.blocks, { type: "text", text: data.delta }] };
+      });
     },
 
     onToolStart: (data) => {
@@ -91,9 +89,15 @@ export function useChat() {
     },
 
     onComplete: () => {
+      // Use functional updater so `prev` includes ALL queued text deltas
+      // (the last onText and onComplete can arrive in the same microtask)
       setActiveMessage((prev) => {
         if (prev) {
-          setMessages((msgs) => [...msgs, prev]);
+          setMessages((msgs) => {
+            // StrictMode guard: React may double-invoke this updater
+            if (msgs.length > 0 && msgs[msgs.length - 1].id === prev.id) return msgs;
+            return [...msgs, prev];
+          });
         }
         activeRef.current = null;
         return null;
@@ -102,13 +106,10 @@ export function useChat() {
     },
 
     onError: (data) => {
-      // Append error as text block
-      if (activeRef.current) {
-        updateActive((m) => ({
-          ...m,
-          blocks: [...m.blocks, { type: "text", text: `\n\nError: ${data.message}` }],
-        }));
-      }
+      updateActive((m) => ({
+        ...m,
+        blocks: [...m.blocks, { type: "text", text: `\n\nError: ${data.message}` }],
+      }));
     },
 
     onStatus: (data) => {
