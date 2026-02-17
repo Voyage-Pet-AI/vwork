@@ -41,6 +41,7 @@ import { select } from "./prompts/select.js";
 import pc from "picocolors";
 import { ChatSession } from "./chat/session.js";
 import { startTUI } from "./tui/app.js";
+import { startWebServer } from "./server/index.js";
 import { log, error } from "./utils/log.js";
 import { readLine } from "./utils/readline.js";
 import { startBackgroundUpdateCheck, forceCheckUpdate, executeUpdate } from "./update.js";
@@ -89,6 +90,9 @@ async function main() {
       return cmdHistory();
     case "schedule":
       return cmdSchedule();
+    case "serve":
+    case "web":
+      return cmdServe();
     case "update":
       return cmdUpdate();
     default:
@@ -459,6 +463,55 @@ async function cmdChat() {
     // Build services list for TUI header
     const services = servers.map((s) => ({ name: s.name.charAt(0).toUpperCase() + s.name.slice(1) }));
     await startTUI({ session, config, services });
+  } finally {
+    await mcpClient.disconnect();
+  }
+}
+
+async function cmdServe() {
+  if (!configExists()) {
+    error(`Config not found. Run "vwork init" first.`);
+    process.exit(1);
+  }
+
+  const config = loadConfig();
+  const portArg = args.indexOf("--port");
+  const port = portArg !== -1 ? parseInt(args[portArg + 1], 10) : undefined;
+
+  const servers: ReturnType<typeof getEnabledServers> = [];
+  let customServerNames: string[] = [];
+
+  try {
+    servers.push(...getEnabledServers(config));
+  } catch (e) {
+    log(`Skipping some integrations: ${e instanceof Error ? e.message : e}`);
+  }
+
+  try {
+    const mcpConfig = loadMCPConfig();
+    const customServers = mcpConfigToServers(mcpConfig);
+    customServerNames = customServers.map((s) => s.name);
+    servers.push(...customServers);
+  } catch (_) {}
+
+  const mcpClient = new MCPClientManager(config.github?.orgs ?? []);
+
+  try {
+    if (servers.length > 0) {
+      await mcpClient.connect(servers);
+    }
+
+    const provider = createProvider(config);
+    const serverNames = servers.map((s) => s.name.charAt(0).toUpperCase() + s.name.slice(1));
+
+    await startWebServer({
+      config,
+      provider,
+      mcpClient,
+      customServerNames,
+      serverNames,
+      port,
+    });
   } finally {
     await mcpClient.disconnect();
   }
@@ -996,6 +1049,7 @@ function cmdHelp() {
 Commands:
   vwork                             Start interactive chat (default)
   vwork chat                        Start interactive chat
+  vwork serve                       Start web UI server
   vwork init                        Create config at ~/vwork/config.toml
   vwork run                         Generate report (stdout)
   vwork run --dry                   List available tools, skip LLM
