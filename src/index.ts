@@ -43,6 +43,7 @@ import { ChatSession } from "./chat/session.js";
 import { startTUI } from "./tui/app.js";
 import { log, error } from "./utils/log.js";
 import { readLine } from "./utils/readline.js";
+import { startBackgroundUpdateCheck, forceCheckUpdate, executeUpdate } from "./update.js";
 
 import type { LLMProvider } from "./llm/provider.js";
 
@@ -88,6 +89,8 @@ async function main() {
       return cmdHistory();
     case "schedule":
       return cmdSchedule();
+    case "update":
+      return cmdUpdate();
     default:
       return cmdHelp();
   }
@@ -982,6 +985,11 @@ async function cmdScheduleRun() {
   }
 }
 
+async function cmdUpdate() {
+  if (args[1] === "check") return forceCheckUpdate(VERSION);
+  return executeUpdate(VERSION);
+}
+
 function cmdHelp() {
   console.log(`vwork — AI-powered work assistant
 
@@ -1016,6 +1024,8 @@ Commands:
   vwork memory forget <date>        Remove a note by date
   vwork history                     List past reports
   vwork schedule run <name>         Run a scheduled report (used by cron)
+  vwork update                      Update to latest version
+  vwork update check                Check for available updates
 
 Options:
   -v, --version                    Show version
@@ -1028,7 +1038,22 @@ Environment:
   VWORK_DEBUG          Set to 1 for debug logging`);
 }
 
-main().catch((e) => {
-  error(e instanceof Error ? e.message : String(e));
-  process.exit(1);
-});
+// Start background update check (skip for version/update commands)
+const skipUpdateCheck = args.includes("-v") || args.includes("--version") || command === "update";
+const updateCheckPromise = skipUpdateCheck
+  ? Promise.resolve(null)
+  : startBackgroundUpdateCheck(VERSION);
+
+main()
+  .then(async () => {
+    // Race the update check against a 2s timeout
+    const notification = await Promise.race([
+      updateCheckPromise,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+    ]);
+    if (notification) process.stderr.write(notification + "\n");
+  })
+  .catch((e) => {
+    error(e instanceof Error ? e.message : String(e));
+    process.exit(1);
+  });
