@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { loadConfig, initConfig, configExists, getConfigPath, resolveSecret, updateSlackConfig, type SlackInitConfig, type Config } from "./config.js";
+import { loadConfig, initConfig, configExists, getConfigPath, resolveSecret, updateSlackConfig, updateLLMConfig, type SlackInitConfig, type Config } from "./config.js";
 import { getEnabledServers } from "./mcp/registry.js";
 import { MCPClientManager } from "./mcp/client.js";
 import { AnthropicProvider } from "./llm/anthropic.js";
@@ -34,9 +34,11 @@ import { waitForOAuthCallback } from "./auth/callback.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { loadMCPConfig, saveMCPConfig, mcpConfigToServers, getMCPConfigPath, type MCPServerDef } from "./mcp/config.js";
+import { loadMCPConfig, saveMCPConfig, mcpConfigToServers, type MCPServerDef } from "./mcp/config.js";
 import { MCP_CATALOG, type CatalogEntry } from "./mcp/catalog.js";
 import { multiselect, cancelSymbol, type MultiselectItem } from "./prompts/multiselect.js";
+import { select } from "./prompts/select.js";
+import pc from "picocolors";
 import { ChatSession } from "./chat/session.js";
 import { startTUI } from "./tui/app.js";
 import { log, error } from "./utils/log.js";
@@ -92,48 +94,48 @@ async function main() {
 }
 
 async function cmdInit() {
-  // 1. Config creation
-  if (configExists()) {
-    console.log(`Config already exists at ${getConfigPath()}`);
-  } else {
-    console.log(initConfig());
-    const configPath = getConfigPath();
-    const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-    Bun.spawn([opener, configPath], { stdio: ["ignore", "ignore", "ignore"] });
+  // ── Step 1: Welcome ──────────────────────────────────────────────
+  process.stderr.write("\n");
+  process.stderr.write(`  ${pc.bold("vwork")} ${pc.dim("— AI-powered work assistant")}\n`);
+  process.stderr.write(`  ${pc.dim("Let's get you set up.\n")}\n`);
+
+  // Ensure config exists (silently create if needed)
+  if (!configExists()) {
+    initConfig();
   }
 
+  // ── Step 2: LLM Provider ────────────────────────────────────────
   const config = loadConfig();
+  const anthropicAuth = hasAnthropicAuth(config);
+  const openaiAuth = hasOpenAIAuth(config);
+  const hasLLMAuth = anthropicAuth.mode !== "none" || openaiAuth.mode !== "none";
 
-  // Check LLM auth and offer login if needed
-  if (config.llm.provider === "openai") {
-    const openaiAuth = hasOpenAIAuth(config);
-    if (openaiAuth.mode !== "none") {
-      log(`OpenAI: authenticated (${openaiAuth.mode})`);
-    } else if (!config.llm.api_key_env || !resolveSecret(config.llm.api_key_env)) {
-      process.stderr.write("\nLog in to OpenAI with OAuth? (Y/n) ");
-      const answer = await readLine();
-      if (answer.trim().toLowerCase() !== "n") {
-        await loginOpenAI();
-      }
-    } else {
-      log("OpenAI: authenticated (config)");
-    }
+  if (hasLLMAuth) {
+    const provider = anthropicAuth.mode !== "none" ? "Anthropic" : "OpenAI";
+    const mode = anthropicAuth.mode !== "none" ? anthropicAuth.mode : openaiAuth.mode;
+    log(`${provider}: authenticated (${mode})`);
   } else {
-    const anthropicAuth = hasAnthropicAuth(config);
-    if (anthropicAuth.mode !== "none") {
-      log(`Anthropic: authenticated (${anthropicAuth.mode})`);
-    } else if (!config.llm.api_key_env || !resolveSecret(config.llm.api_key_env)) {
-      process.stderr.write("\nLog in to Anthropic with OAuth? (Y/n) ");
-      const answer = await readLine();
-      if (answer.trim().toLowerCase() !== "n") {
-        await loginAnthropicApiKey();
-      }
+    const providerResult = await select<"anthropic" | "openai">({
+      message: "Choose your LLM provider",
+      items: [
+        { value: "anthropic", label: "Anthropic", hint: "(recommended)" },
+        { value: "openai", label: "OpenAI", hint: "" },
+      ],
+    });
+
+    if (providerResult === cancelSymbol) return;
+
+    const provider = providerResult as "anthropic" | "openai";
+
+    if (provider === "openai") {
+      updateLLMConfig("openai", "gpt-4.1");
+      await loginOpenAI();
     } else {
-      log("Anthropic: authenticated (config)");
+      await loginAnthropicApiKey();
     }
   }
 
-  // 2. Determine which builtins are already authenticated
+  // ── Step 3: Connect Integrations ────────────────────────────────
   const githubAuthed = !!(loadStoredGitHubToken() || config.github.token_env);
   const jiraAuthed = hasAtlassianAuth();
   const slackToken = getSlackToken() || (config.slack.token_env && resolveSecret(config.slack.token_env));
@@ -145,57 +147,69 @@ async function cmdInit() {
     slack: slackAuthed,
   };
 
-  // Print status for already-authenticated services
-  if (githubAuthed) log("GitHub: authenticated");
-  if (jiraAuthed) log("Jira: authenticated");
-  if (slackAuthed) log("Slack: authenticated");
+  const connectedServices: string[] = [];
+  if (githubAuthed) { log("GitHub: connected"); connectedServices.push("GitHub"); }
+  if (jiraAuthed) { log("Jira: connected"); connectedServices.push("Jira"); }
+  if (slackAuthed) { log("Slack: connected"); connectedServices.push("Slack"); }
 
-  // 3. Build unified multiselect — skip authed builtins + already-configured MCP servers
   const existingMCPConfig = loadMCPConfig();
   const existingMCPNames = new Set(Object.keys(existingMCPConfig.mcpServers));
+
+  for (const name of existingMCPNames) {
+    connectedServices.push(name.charAt(0).toUpperCase() + name.slice(1));
+  }
 
   const available = MCP_CATALOG.filter((entry) => {
     if (entry.builtin) return !authedBuiltins[entry.name];
     return !existingMCPNames.has(entry.name);
   });
 
-  if (available.length === 0) return;
+  if (available.length > 0) {
+    process.stderr.write("\n");
+    const items: MultiselectItem<CatalogEntry>[] = available.map((entry) => ({
+      value: entry,
+      label: entry.label,
+      hint: entry.description,
+    }));
 
-  process.stderr.write("\n");
-  const items: MultiselectItem<CatalogEntry>[] = available.map((entry) => ({
-    value: entry,
-    label: entry.label,
-    hint: entry.description,
-  }));
+    const result = await multiselect<CatalogEntry>({
+      message: "Connect your work tools",
+      items,
+    });
 
-  const result = await multiselect<CatalogEntry>({
-    message: "Set up integrations",
-    items,
-  });
+    if (result !== cancelSymbol && Array.isArray(result) && result.length > 0) {
+      const selectedEntries = result as CatalogEntry[];
+      const mcpConfig = loadMCPConfig();
+      let addedCount = 0;
 
-  if (result === cancelSymbol || (Array.isArray(result) && result.length === 0)) {
-    return;
-  }
+      for (const entry of selectedEntries) {
+        if (entry.builtin) {
+          await handleBuiltinSetup(entry, config);
+          connectedServices.push(entry.label);
+        } else {
+          const added = await handleCatalogSetup(entry, mcpConfig);
+          if (added) {
+            addedCount++;
+            connectedServices.push(entry.label);
+          }
+        }
+      }
 
-  const selectedEntries = result as CatalogEntry[];
-
-  // 4. Process each selected entry
-  const mcpConfig = loadMCPConfig();
-  let addedCount = 0;
-
-  for (const entry of selectedEntries) {
-    if (entry.builtin) {
-      await handleBuiltinSetup(entry, config);
-    } else {
-      const added = await handleCatalogSetup(entry, mcpConfig);
-      if (added) addedCount++;
+      if (addedCount > 0) {
+        saveMCPConfig(mcpConfig);
+      }
     }
   }
 
-  if (addedCount > 0) {
-    saveMCPConfig(mcpConfig);
-    log(`Saved ${addedCount} MCP server${addedCount > 1 ? "s" : ""} to ${getMCPConfigPath()}`);
+  // ── Step 4: Done ────────────────────────────────────────────────
+  process.stderr.write("\n");
+  if (connectedServices.length > 0) {
+    process.stderr.write(`  ${pc.green("✓")} Connected: ${connectedServices.join(", ")}\n`);
   }
+  process.stderr.write(`\n  ${pc.bold("Next steps:")}\n`);
+  process.stderr.write(`  ${pc.dim("$")} ${pc.cyan("vwork")}          Start interactive chat\n`);
+  process.stderr.write(`  ${pc.dim("$")} ${pc.cyan("vwork run")}      Generate a report\n`);
+  process.stderr.write("\n");
 }
 
 async function handleBuiltinSetup(entry: CatalogEntry, _config: ReturnType<typeof loadConfig>) {

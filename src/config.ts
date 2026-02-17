@@ -299,6 +299,15 @@ export function initConfig(): string {
   return `Config created at ${CONFIG_PATH}\nEdit it to add your API keys and preferences.`;
 }
 
+export function updateLLMConfig(provider: "anthropic" | "openai", model: string): void {
+  const raw = readFileSync(CONFIG_PATH, "utf-8");
+  const updated = raw.replace(
+    /\[llm\][\s\S]*?(?=\n\[|$)/,
+    `[llm]\nprovider = "${provider}"\nmodel = "${model}"\n`
+  );
+  writeFileSync(CONFIG_PATH, updated);
+}
+
 export function updateSlackConfig(slack: SlackInitConfig): void {
   const raw = readFileSync(CONFIG_PATH, "utf-8");
   const channelsStr = JSON.stringify(slack.channels);
