@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicksenger/tauri/refs/heads/v2/crates/tauri-utils/schema.json",
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/refs/heads/v2/crates/tauri-utils/schema.json",
   "productName": "VWork",
   "version": "0.1.5",
   "identifier": "com.vwork.app",
@@ -23,7 +23,9 @@
         "url": "http://localhost:3141"
       }
     ],
-    "security": {}
+    "security": {
+      "csp": "default-src 'self' http://localhost:3141; script-src 'self' 'unsafe-inline' http://localhost:3141; style-src 'self' 'unsafe-inline' http://localhost:3141; connect-src 'self' http://localhost:3141; img-src 'self' data: http://localhost:3141"
+    }
   },
   "bundle": {
     "active": true,

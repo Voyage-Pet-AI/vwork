@@ -8,7 +8,7 @@
       "identifier": "shell:allow-execute",
       "allow": [
         {
-          "args": true,
+          "args": ["serve", "--port", { "validator": "\\d+" }],
           "name": "binaries/vwork-server",
           "sidecar": true
         }
@@ -18,7 +18,7 @@
       "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "args": true,
+          "args": ["serve", "--port", { "validator": "\\d+" }],
           "name": "binaries/vwork-server",
           "sidecar": true
         }

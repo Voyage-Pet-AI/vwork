@@ -80,10 +80,30 @@ fn spawn_sidecar() -> Result<Child, String> {
     Ok(child)
 }
 
-/// Kill the sidecar process gracefully.
+/// Kill the sidecar process — try SIGTERM first, fall back to SIGKILL.
 fn kill_sidecar(state: &SidecarState) {
     if let Ok(mut guard) = state.0.lock() {
         if let Some(mut child) = guard.take() {
+            // Try graceful SIGTERM first
+            #[cfg(unix)]
+            {
+                let pid = child.id() as i32;
+                unsafe { libc::kill(pid, libc::SIGTERM); }
+
+                // Wait up to 3 seconds for graceful exit
+                let start = std::time::Instant::now();
+                loop {
+                    match child.try_wait() {
+                        Ok(Some(_)) => return,
+                        Ok(None) if start.elapsed() < Duration::from_secs(3) => {
+                            std::thread::sleep(Duration::from_millis(100));
+                        }
+                        _ => break,
+                    }
+                }
+            }
+
+            // Force kill if still running
             let _ = child.kill();
             let _ = child.wait();
         }
@@ -218,7 +238,10 @@ async fn trigger_report(app: &AppHandle) {
     let url = format!("http://127.0.0.1:{}/api/report/run", DEFAULT_PORT);
 
     let result: Result<(), String> = async {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
         let resp = client
             .post(&url)
             .header("Content-Type", "application/json")
@@ -279,33 +302,50 @@ pub fn run() {
 
             // Spawn the VWork sidecar server
             eprintln!("[vwork] Starting sidecar on port {}...", DEFAULT_PORT);
-            match spawn_sidecar() {
+            let sidecar_ok = match spawn_sidecar() {
                 Ok(child) => {
                     let state = handle.state::<SidecarState>();
                     *state.0.lock().unwrap() = Some(child);
                     eprintln!("[vwork] Sidecar spawned, waiting for server...");
+                    true
                 }
                 Err(e) => {
                     eprintln!("[vwork] {}", e);
+                    #[cfg(desktop)]
+                    {
+                        use tauri_plugin_notification::NotificationExt;
+                        let _ = handle
+                            .notification()
+                            .builder()
+                            .title("VWork")
+                            .body(format!(
+                                "Failed to start server on port {}: {}",
+                                DEFAULT_PORT, e
+                            ))
+                            .show();
+                    }
+                    false
                 }
-            }
+            };
 
             // Wait for server in a background thread, then navigate the webview
-            let handle2 = handle.clone();
-            std::thread::spawn(move || {
-                match wait_for_server(DEFAULT_PORT, Duration::from_secs(15)) {
-                    Ok(()) => {
-                        eprintln!("[vwork] Server is ready!");
-                        if let Some(w) = handle2.get_webview_window("main") {
-                            let url = format!("http://localhost:{}", DEFAULT_PORT);
-                            let _ = w.navigate(url.parse().unwrap());
+            if sidecar_ok {
+                let handle2 = handle.clone();
+                std::thread::spawn(move || {
+                    match wait_for_server(DEFAULT_PORT, Duration::from_secs(15)) {
+                        Ok(()) => {
+                            eprintln!("[vwork] Server is ready!");
+                            if let Some(w) = handle2.get_webview_window("main") {
+                                let url = format!("http://localhost:{}", DEFAULT_PORT);
+                                let _ = w.navigate(url.parse().unwrap());
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[vwork] {}", e);
                         }
                     }
-                    Err(e) => {
-                        eprintln!("[vwork] {}", e);
-                    }
-                }
-            });
+                });
+            }
 
             // Set up system tray
             setup_tray(&handle)?;
