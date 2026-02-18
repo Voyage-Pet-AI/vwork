@@ -95,6 +95,35 @@ bun run dev:server    # Backend on :3141
 bun run dev:web       # Frontend on :5173 (proxies API to backend)
 ```
 
+### macOS App
+
+A native macOS app that wraps the web UI in a proper desktop experience — system tray, native menus, notifications, and auto-launch at login. No terminal required.
+
+**Install from DMG:**
+Download from [Releases](https://github.com/boxiangma/vwork/releases), mount the DMG, drag to Applications.
+
+**Build from source:**
+```bash
+bun run build:tauri    # Builds web UI → compiles sidecar → bundles .app + .dmg
+```
+
+The app bundles a standalone VWork server as a sidecar binary. On launch it starts the server automatically, waits for it to be ready, and loads the UI in a native window.
+
+**Features:**
+- System tray with quick actions (Open, Generate Report, Quit)
+- Launch at Login toggle
+- Native notifications when reports complete
+- Cmd+W hides to tray, Cmd+Q quits
+- macOS menu bar (About, Edit, Window)
+
+**Development:**
+```bash
+bun run dev:server    # Terminal 1: start the VWork server
+bun run dev:tauri     # Terminal 2: open native window pointing to localhost:3141
+```
+
+Requires [Rust](https://rustup.rs) and the Tauri CLI (`cargo install tauri-cli --version "^2"`).
+
 ## Features
 
 ### Chat

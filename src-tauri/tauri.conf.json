@@ -1,0 +1,53 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/refs/heads/v2/crates/tauri-utils/schema.json",
+  "productName": "VWork",
+  "version": "0.1.5",
+  "identifier": "com.vwork.app",
+  "build": {
+    "frontendDist": "../dist/web",
+    "devUrl": "http://localhost:3141",
+    "beforeBuildCommand": "",
+    "beforeDevCommand": ""
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "VWork",
+        "width": 1100,
+        "height": 750,
+        "minWidth": 800,
+        "minHeight": 600,
+        "decorations": true,
+        "transparent": false,
+        "url": "http://localhost:3141"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' http://localhost:3141; script-src 'self' 'unsafe-inline' http://localhost:3141; style-src 'self' 'unsafe-inline' http://localhost:3141; connect-src 'self' http://localhost:3141; img-src 'self' data: http://localhost:3141"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": ["binaries/vwork-server"],
+    "resources": {
+      "../dist/web": "web/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}
